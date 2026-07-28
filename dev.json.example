@@ -1,0 +1,7 @@
+{
+  "SUPABASE_URL": "https://feawmdvwzrbajuxtuzyf.supabase.co",
+  "SUPABASE_KEY": "sb_publishable_...",
+  "DEV_EMAIL": "ton@email.com",
+  "DEV_PASSWORD": "ton-mot-de-passe",
+  "ADS_TEST": "true"
+}

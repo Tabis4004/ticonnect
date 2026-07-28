@@ -9,3 +9,7 @@ build/
 android/key.properties
 *.keystore
 *.jks
+
+# Identifiants de developpement : jamais dans le depot
+dev.json
+supabase/seed_dev.sql

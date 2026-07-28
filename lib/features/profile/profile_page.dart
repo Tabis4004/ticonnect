@@ -9,13 +9,14 @@ import '../../services/session.dart';
 import '../../services/workers_service.dart';
 import '../../widgets/common.dart';
 import '../worker/wallet_page.dart';
+import 'admin_page.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final session = context.watch<Session>();
+    final session = context.watch<AppSession>();
     final p = session.profile;
     if (p == null) return const Scaffold(body: Loading());
 
@@ -28,7 +29,7 @@ class ProfilePage extends StatelessWidget {
           child: Column(children: [
             CircleAvatar(
               radius: 40,
-              backgroundColor: AppTheme.primary.withOpacity(0.12),
+              backgroundColor: AppTheme.primary.withValues(alpha: 0.12),
               child: Text(p.fullName.substring(0, 1).toUpperCase(),
                   style: const TextStyle(
                       fontSize: 28,
@@ -82,12 +83,24 @@ class ProfilePage extends StatelessWidget {
               MaterialPageRoute(builder: (_) => const WorkerSetupPage()),
             ),
           ),
+        if (session.isAdmin) ...[
+          const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.shield_outlined, color: AppTheme.primary),
+            title: const Text('Administration'),
+            subtitle: const Text('Statistiques, signalements, fuite de contacts'),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AdminPage()),
+            ),
+          ),
+        ],
         const Divider(height: 1),
         ListTile(
           leading: const Icon(Icons.logout, color: AppTheme.danger),
           title: const Text('Se déconnecter',
               style: TextStyle(color: AppTheme.danger)),
-          onTap: () => context.read<Session>().signOut(),
+          onTap: () => context.read<AppSession>().signOut(),
         ),
       ]),
     );
@@ -124,7 +137,7 @@ class _WorkerSetupPageState extends State<WorkerSetupPage> {
     _categories = await CatalogService.categories();
     _trades = await CatalogService.trades();
 
-    final session = context.read<Session>();
+    final session = context.read<AppSession>();
     final w = session.worker;
     if (w != null) {
       _headline.text = w.headline ?? '';
@@ -162,7 +175,7 @@ class _WorkerSetupPageState extends State<WorkerSetupPage> {
       );
       await WorkersService.setTrades(_selected.toList());
       if (!mounted) return;
-      await context.read<Session>().refresh();
+      await context.read<AppSession>().refresh();
       if (mounted) {
         showOk(context, 'Profil enregistré');
         Navigator.pop(context);

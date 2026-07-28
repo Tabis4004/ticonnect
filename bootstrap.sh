@@ -5,7 +5,7 @@ set -e
 cd "$(dirname "$0")"
 
 echo "==> Génération du squelette de plateforme"
-flutter create . --org ci.ticonnect --project-name ticonnect --platforms=android,ios
+flutter create . --org ci.ticonnect --project-name ticonnect --platforms=android,ios,web
 
 echo "==> Récupération des dépendances"
 flutter pub get

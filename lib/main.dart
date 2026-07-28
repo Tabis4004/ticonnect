@@ -22,7 +22,7 @@ Future<void> main() async {
 
   await Supabase.initialize(
     url: AppConfig.supabaseUrl,
-    anonKey: AppConfig.supabaseKey,
+    publishableKey: AppConfig.supabaseKey,
   );
 
   // Le SDK publicitaire s'initialise en arrière-plan : on ne bloque pas
@@ -38,7 +38,7 @@ class TiconnectApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => Session(),
+      create: (_) => AppSession(),
       child: MaterialApp(
         title: 'Ticonnect',
         debugShowCheckedModeBanner: false,
@@ -55,7 +55,7 @@ class _Gate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final session = context.watch<Session>();
+    final session = context.watch<AppSession>();
     if (session.loading) {
       return const Scaffold(body: Loading());
     }

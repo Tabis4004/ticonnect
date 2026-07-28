@@ -1,20 +1,21 @@
 import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/supabase.dart';
 import '../models/models.dart';
+import 'auth_service.dart';
 
 /// État de session : utilisateur connecté, profil, profil ouvrier, crédits.
 ///
 /// Un seul objet observable pour toute l'app, exposé via Provider. Évite
 /// d'aller relire la base à chaque écran pour savoir qui est connecté.
-class Session extends ChangeNotifier {
+class AppSession extends ChangeNotifier {
   Profile? profile;
   WorkerProfile? worker;
   Wallet? wallet;
+  bool isAdmin = false;
   bool loading = true;
 
-  Session() {
+  AppSession() {
     db.auth.onAuthStateChange.listen((_) => refresh());
     refresh();
   }
@@ -30,6 +31,7 @@ class Session extends ChangeNotifier {
       profile = null;
       worker = null;
       wallet = null;
+      isAdmin = false;
       loading = false;
       notifyListeners();
       return;
@@ -51,6 +53,8 @@ class Session extends ChangeNotifier {
       wallet = rows[2] == null
           ? null
           : Wallet.fromMap(rows[2] as Map<String, dynamic>);
+
+      isAdmin = await AuthService.isAdmin();
     } catch (_) {
       // Hors ligne : on garde l'état précédent plutôt que de vider l'écran.
     }
@@ -64,6 +68,7 @@ class Session extends ChangeNotifier {
     profile = null;
     worker = null;
     wallet = null;
+    isAdmin = false;
     notifyListeners();
   }
 }

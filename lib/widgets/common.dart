@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import '../core/formatters.dart';
 import '../core/theme.dart';
@@ -83,8 +82,9 @@ class VerifiedBadge extends StatelessWidget {
 }
 
 /// Bannière publicitaire pilotée par la table `ad_placements`.
-/// Ne réserve aucun espace tant que la publicité n'est pas chargée :
-/// évite le trou blanc si l'inventaire est vide, fréquent sur ce marché.
+///
+/// Rend un espace nul tant qu'aucune publicité n'est disponible — ce qui est
+/// le cas permanent sur le web, où AdMob n'existe pas.
 class AdBannerSlot extends StatefulWidget {
   final String placementKey;
   const AdBannerSlot({super.key, required this.placementKey});
@@ -94,8 +94,7 @@ class AdBannerSlot extends StatefulWidget {
 }
 
 class _AdBannerSlotState extends State<AdBannerSlot> {
-  BannerAd? _ad;
-  bool _loaded = false;
+  Widget? _banner;
 
   @override
   void initState() {
@@ -104,38 +103,16 @@ class _AdBannerSlotState extends State<AdBannerSlot> {
   }
 
   Future<void> _prepare() async {
+    if (!AdsService.supported) return;
     // La configuration vient de la base : il faut qu'elle soit chargée avant
     // de savoir si l'emplacement est actif et quel identifiant d'unité utiliser.
     await AdsService.init();
     if (!mounted) return;
-
-    final ad = AdsService.createBanner(widget.placementKey);
-    if (ad == null) return;
-    _ad = ad;
-
-    // On n'occupe la place qu'une fois la publicité effectivement chargée :
-    // pas de bandeau blanc quand l'inventaire est vide, ce qui arrive souvent
-    // sur ce marché.
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted && _ad != null) setState(() => _loaded = true);
-    });
+    setState(() => _banner = AdsService.bannerWidget(widget.placementKey));
   }
 
   @override
-  void dispose() {
-    _ad?.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_ad == null || !_loaded) return const SizedBox.shrink();
-    return SizedBox(
-      width: _ad!.size.width.toDouble(),
-      height: _ad!.size.height.toDouble(),
-      child: AdWidget(ad: _ad!),
-    );
-  }
+  Widget build(BuildContext context) => _banner ?? const SizedBox.shrink();
 }
 
 class WorkerCard extends StatelessWidget {
@@ -154,7 +131,7 @@ class WorkerCard extends StatelessWidget {
           child: Row(children: [
             CircleAvatar(
               radius: 28,
-              backgroundColor: AppTheme.primary.withOpacity(0.12),
+              backgroundColor: AppTheme.primary.withValues(alpha: 0.12),
               backgroundImage:
                   worker.avatarUrl != null ? NetworkImage(worker.avatarUrl!) : null,
               child: worker.avatarUrl == null
@@ -187,7 +164,7 @@ class WorkerCard extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: AppTheme.accent.withOpacity(0.18),
+                          color: AppTheme.accent.withValues(alpha: 0.18),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: const Text('EN AVANT',
@@ -257,7 +234,7 @@ class JobCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: AppTheme.danger.withOpacity(0.12),
+                      color: AppTheme.danger.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: const Text('URGENT',

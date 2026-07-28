@@ -68,10 +68,15 @@ class _LockedContactCardState extends State<LockedContactCard> {
     if (result.ok) {
       setState(() => _unlocked = true);
       await _loadContact();
-      if (mounted) {
-        await context.read<Session>().refresh();
-        showOk(context, 'Contact débloqué');
-      }
+      if (!mounted) return;
+
+      // On capture la session avant l'await : réutiliser `context` de l'autre
+      // côté d'une frontière asynchrone est une source classique de crash
+      // quand l'utilisateur quitte l'écran entre-temps.
+      final session = context.read<AppSession>();
+      await session.refresh();
+      if (!mounted) return;
+      showOk(context, 'Contact débloqué');
     } else {
       showError(context, result.message ?? 'Déverrouillage impossible');
     }
@@ -86,7 +91,7 @@ class _LockedContactCardState extends State<LockedContactCard> {
   Widget _unlockedView() {
     final phone = _contact?.phone;
     return Card(
-      color: AppTheme.primary.withOpacity(0.06),
+      color: AppTheme.primary.withValues(alpha: 0.06),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -133,7 +138,7 @@ class _LockedContactCardState extends State<LockedContactCard> {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: const [
+          const Row(children: [
             Icon(Icons.phone_outlined, color: AppTheme.primary),
             SizedBox(width: 8),
             Text('Contacter le client',
@@ -162,7 +167,7 @@ class _LockedContactCardState extends State<LockedContactCard> {
   }
 
   Widget _lockedView() {
-    final session = context.watch<Session>();
+    final session = context.watch<AppSession>();
     final freeLeft = session.worker?.freeUnlocksLeft ?? 0;
     final credits = session.credits;
 
@@ -173,10 +178,10 @@ class _LockedContactCardState extends State<LockedContactCard> {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            const Icon(Icons.lock_outline_rounded, color: Colors.black45),
-            const SizedBox(width: 8),
-            const Text('Contact verrouillé',
+          const Row(children: [
+            Icon(Icons.lock_outline_rounded, color: Colors.black45),
+            SizedBox(width: 8),
+            Text('Contact verrouillé',
                 style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
           ]),
           const SizedBox(height: 6),

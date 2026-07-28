@@ -3,6 +3,7 @@
 /// Chaque classe correspond à une table ou à une fonction de recherche.
 /// Les noms de champs reprennent exactement les colonnes SQL pour qu'une
 /// évolution du schéma se répercute sans ambiguïté.
+library;
 
 double? _d(dynamic v) => v == null ? null : (v as num).toDouble();
 int _i(dynamic v, [int fallback = 0]) => (v as num?)?.toInt() ?? fallback;

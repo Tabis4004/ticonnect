@@ -60,7 +60,7 @@ class _ConversationsPageState extends State<ConversationsPage> {
                       final unread = me == null ? 0 : c.unreadFor(me);
                       return ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: AppTheme.primary.withOpacity(0.12),
+                          backgroundColor: AppTheme.primary.withValues(alpha: 0.12),
                           backgroundImage: c.otherAvatar != null
                               ? NetworkImage(c.otherAvatar!)
                               : null,

@@ -57,7 +57,7 @@ class AppTheme {
           borderSide: const BorderSide(color: Color(0xFFDDE2DE)),
         ),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         elevation: 0,
         color: Colors.white,
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),

@@ -100,7 +100,7 @@ class _WorkerDetailPageState extends State<WorkerDetailPage> {
           child: Column(children: [
             CircleAvatar(
               radius: 44,
-              backgroundColor: AppTheme.primary.withOpacity(0.12),
+              backgroundColor: AppTheme.primary.withValues(alpha: 0.12),
               backgroundImage: p.avatarUrl != null ? NetworkImage(p.avatarUrl!) : null,
               child: p.avatarUrl == null
                   ? Text(p.fullName.substring(0, 1).toUpperCase(),
@@ -153,7 +153,7 @@ class _WorkerDetailPageState extends State<WorkerDetailPage> {
           child: Column(children: [
             if (_contact != null) ...[
               Card(
-                color: AppTheme.primary.withOpacity(0.06),
+                color: AppTheme.primary.withValues(alpha: 0.06),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(children: [

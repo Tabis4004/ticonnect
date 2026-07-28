@@ -21,7 +21,7 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
-    final isWorker = context.watch<Session>().isWorker;
+    final isWorker = context.watch<AppSession>().isWorker;
 
     final pages = isWorker
         ? const [JobFeedPage(), ConversationsPage(), ProfilePage()]

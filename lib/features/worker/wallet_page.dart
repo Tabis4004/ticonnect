@@ -39,7 +39,7 @@ class _WalletPageState extends State<WalletPage> {
     setState(() => _loading = true);
     try {
       _history = await WalletService.history();
-      if (mounted) await context.read<Session>().refresh();
+      if (mounted) await context.read<AppSession>().refresh();
     } catch (e) {
       if (mounted) showError(context, humanError(e));
     }
@@ -64,7 +64,7 @@ class _WalletPageState extends State<WalletPage> {
 
   @override
   Widget build(BuildContext context) {
-    final session = context.watch<Session>();
+    final session = context.watch<AppSession>();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Mes crédits')),

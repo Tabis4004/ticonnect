@@ -30,6 +30,80 @@ flutter pub upgrade --major-versions
 
 ---
 
+## Tester en local
+
+L'application tape sur le projet Supabase hébergé — pas besoin de base locale.
+
+```bash
+cd ~/Documents/ticonnect
+./bootstrap.sh                                # une seule fois
+flutter run --dart-define-from-file=dev.json
+```
+
+### Dans le navigateur, tout de suite
+
+Le plus rapide pour voir l'application tourner, sans émulateur ni téléphone :
+
+```bash
+flutter create . --platforms=web       # si le dossier web/ n'existe pas encore
+flutter run -d chrome --dart-define-from-file=dev.json
+```
+
+Tout fonctionne — connexion, recherche, publication, messagerie temps réel —
+**sauf la publicité** : AdMob n'a pas d'implémentation web. `AdsService` le
+détecte via `kIsWeb` et ne demande simplement aucune publicité, sans planter.
+
+### Sur un vrai appareil
+
+Émulateur Android (Android Studio → Device Manager) ou téléphone branché en
+USB avec le débogage activé :
+
+```bash
+flutter run --dart-define-from-file=dev.json
+```
+
+C'est le seul contexte où la publicité s'affiche.
+`flutter devices` liste ce qui est disponible.
+
+### Se connecter
+
+L'inscription normale passe par SMS, ce qui suppose un fournisseur configuré
+et facturé. Pour le développement, l'écran d'accueil propose
+**« Connexion par email (admin et tests) »**, avec les champs pré-remplis
+depuis `dev.json`.
+
+| Compte | Email | Rôle |
+|---|---|---|
+| Superadmin | `isidoretabati@gmail.com` | accès total + tableau de bord |
+| Client | `client@ticonnect.test` | parcours demandeur |
+| Ouvrier | `ouvrier@ticonnect.test` | parcours ouvrier |
+
+Le mot de passe est dans `dev.json`, à la racine du projet.
+
+**`dev.json` est ignoré par Git, et doit le rester.** Le dépôt est public :
+un mot de passe committé donnerait à n'importe qui l'accès superadmin à la
+base de production. `dev.json.example` est là pour montrer le format à un
+autre développeur. Les comptes et les données de démonstration sont recréés
+par `supabase/seed_dev.sql`, lui aussi hors dépôt.
+
+### Ce qu'il y a déjà en base
+
+Trois missions de démonstration à Abidjan (maçonnerie, plomberie, chauffeur)
+publiées par le compte client, et un profil de maçon vérifié. De quoi voir les
+deux parcours tourner immédiatement.
+
+### Le tableau de bord admin
+
+Visible dans *Mon compte* quand le profil connecté figure dans la table
+`admins` : volumétrie, signalements ouverts, et surtout le **taux de fuite
+hors plateforme** — les messages contenant un numéro de téléphone. C'est
+l'indicateur qui dira si les gens quittent l'app dès le premier contact.
+
+L'accès repose sur `is_admin()` et les politiques RLS côté base, pas sur du
+code applicatif : impossible à contourner en modifiant l'APK.
+
+---
+
 ## Ce que l'application fait
 
 **Côté client** — gratuit de bout en bout.

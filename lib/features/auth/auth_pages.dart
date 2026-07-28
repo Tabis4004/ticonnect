@@ -3,11 +3,14 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/config.dart';
+import '../../core/countries.dart';
 import '../../core/supabase.dart';
 import '../../core/theme.dart';
 import '../../services/auth_service.dart';
 import '../../services/session.dart';
 import '../../widgets/common.dart';
+import '../../widgets/country_picker.dart';
+import 'email_login_page.dart';
 
 /// Saisie du numéro de téléphone.
 ///
@@ -21,6 +24,7 @@ class PhoneInputPage extends StatefulWidget {
 
 class _PhoneInputPageState extends State<PhoneInputPage> {
   final _phone = TextEditingController();
+  Country _country = Countries.byCode(AppConfig.defaultCountry);
   bool _busy = false;
 
   @override
@@ -37,11 +41,13 @@ class _PhoneInputPageState extends State<PhoneInputPage> {
     }
     setState(() => _busy = true);
     try {
-      await AuthService.sendCode(raw);
+      await AuthService.sendCode(raw, dialCode: _country.dialCode);
       if (!mounted) return;
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => OtpPage(phone: raw)),
+        MaterialPageRoute(
+          builder: (_) => OtpPage(phone: raw, country: _country),
+        ),
       );
     } catch (e) {
       if (mounted) showError(context, humanError(e));
@@ -73,17 +79,23 @@ class _PhoneInputPageState extends State<PhoneInputPage> {
               const Text('Ton numéro de téléphone',
                   style: TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: 10),
-              TextField(
-                controller: _phone,
-                keyboardType: TextInputType.phone,
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9 +]')),
-                ],
-                decoration: const InputDecoration(
-                  prefixText: '${AppConfig.defaultDialCode}  ',
-                  hintText: '07 58 22 91 40',
+              Row(children: [
+                CountryPickerButton(
+                  selected: _country,
+                  onChanged: (c) => setState(() => _country = c),
                 ),
-              ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: _phone,
+                    keyboardType: TextInputType.phone,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9 +]')),
+                    ],
+                    decoration: const InputDecoration(hintText: '07 58 22 91 40'),
+                  ),
+                ),
+              ]),
               const SizedBox(height: 12),
               const Text(
                 'Tu recevras un code par SMS. Ton numéro reste privé : il ne sera '
@@ -95,7 +107,14 @@ class _PhoneInputPageState extends State<PhoneInputPage> {
                 const Loading()
               else
                 FilledButton(onPressed: _submit, child: const Text('Continuer')),
-              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const EmailLoginPage()),
+                ),
+                child: const Text('Connexion par email (admin et tests)'),
+              ),
+              const SizedBox(height: 8),
             ],
           ),
         ),
@@ -107,7 +126,8 @@ class _PhoneInputPageState extends State<PhoneInputPage> {
 /// Saisie du code SMS et création du profil.
 class OtpPage extends StatefulWidget {
   final String phone;
-  const OtpPage({super.key, required this.phone});
+  final Country country;
+  const OtpPage({super.key, required this.phone, required this.country});
   @override
   State<OtpPage> createState() => _OtpPageState();
 }
@@ -141,9 +161,10 @@ class _OtpPageState extends State<OtpPage> {
         code: _code.text.trim(),
         fullName: _name.text.trim(),
         role: _role,
+        country: widget.country,
       );
       if (!mounted) return;
-      await context.read<Session>().refresh();
+      await context.read<AppSession>().refresh();
       if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
     } catch (e) {
       if (mounted) showError(context, humanError(e));
@@ -161,8 +182,11 @@ class _OtpPageState extends State<OtpPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Code envoyé au ${widget.phone}',
-                style: const TextStyle(color: Colors.black54)),
+            Text(
+              'Code envoyé au '
+              '${AuthService.normalizePhone(widget.phone, dialCode: widget.country.dialCode)}',
+              style: const TextStyle(color: Colors.black54),
+            ),
             const SizedBox(height: 24),
             TextField(
               controller: _code,
@@ -232,7 +256,7 @@ class _RoleTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: selected ? AppTheme.primary.withOpacity(0.08) : Colors.white,
+          color: selected ? AppTheme.primary.withValues(alpha: 0.08) : Colors.white,
           border: Border.all(
             color: selected ? AppTheme.primary : const Color(0xFFDDE2DE),
             width: selected ? 2 : 1,

@@ -1,11 +1,13 @@
 import 'dart:async';
-import 'dart:io' show Platform;
 
-import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
+import 'package:flutter/widgets.dart';
 
 import '../core/config.dart';
 import '../core/supabase.dart';
 import '../models/models.dart';
+import 'ads/ads_backend.dart';
 
 /// Service publicitaire.
 ///
@@ -24,7 +26,13 @@ import '../models/models.dart';
 ///    AdMob a confirmé le visionnage via sa callback SSV. Le client ne peut
 ///    pas s'auto-créditer : la politique RLS lui interdit d'écrire
 ///    `ssv_verified` ou `reward_credits`.
+///
+/// Le SDK AdMob n'existe que sur Android et iOS. Il est isolé derrière
+/// [AdsBackend], résolu à la compilation : sur le web, aucune ligne de
+/// `google_mobile_ads` n'est compilée et le service se contente de ne rien
+/// afficher.
 class AdsService {
+  static final AdsBackend _backend = createAdsBackend();
   static final Map<String, AdPlacement> _placements = {};
   static final Map<String, DateTime> _lastShown = {};
   static bool _initialized = false;
@@ -47,10 +55,12 @@ class AdsService {
     },
   };
 
+  static bool get supported => _backend.supported;
+
   static Future<void> init() async {
     if (_initialized) return;
-    await MobileAds.instance.initialize();
     _initialized = true;
+    await _backend.initialize();
     await loadPlacements();
   }
 
@@ -60,7 +70,7 @@ class AdsService {
       final rows = await db.from('ad_placements').select();
       _placements.clear();
       for (final r in rows) {
-        final p = AdPlacement.fromMap(r as Map<String, dynamic>);
+        final p = AdPlacement.fromMap(r);
         _placements[p.key] = p;
       }
     } catch (_) {
@@ -70,18 +80,23 @@ class AdsService {
 
   static AdPlacement? placement(String key) => _placements[key];
 
+  static bool get _isIos =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
   static String? _unitFor(AdPlacement p) {
+    if (!_backend.supported) return null;
     if (AppConfig.adsTestMode) {
       final byPlatform = _testUnits[p.format];
       if (byPlatform == null) return null;
-      return Platform.isIOS ? byPlatform['ios'] : byPlatform['android'];
+      return _isIos ? byPlatform['ios'] : byPlatform['android'];
     }
-    return Platform.isIOS ? p.adUnitIos : p.adUnitAndroid;
+    return _isIos ? p.adUnitIos : p.adUnitAndroid;
   }
 
   /// Un emplacement est jouable si : activé, délai minimum écoulé depuis la
   /// dernière fois, et plafond journalier non atteint.
   static Future<bool> canShow(String key) async {
+    if (!_backend.supported) return false;
     final p = _placements[key];
     if (p == null || !p.isEnabled) return false;
     if (_unitFor(p) == null) return false;
@@ -106,21 +121,14 @@ class AdsService {
   }
 
   // ------------------------------------------------------------- Bannière
-  static BannerAd? createBanner(String key, {AdSize size = AdSize.banner}) {
+  /// Widget de bannière, ou `null` s'il n'y a rien à afficher.
+  static Widget? bannerWidget(String key) {
     final p = _placements[key];
     if (p == null || !p.isEnabled) return null;
     final unit = _unitFor(p);
     if (unit == null) return null;
-
-    return BannerAd(
-      adUnitId: unit,
-      size: size,
-      request: const AdRequest(),
-      listener: BannerAdListener(
-        onAdLoaded: (_) => _lastShown[key] = DateTime.now(),
-        onAdFailedToLoad: (ad, _) => ad.dispose(),
-      ),
-    )..load();
+    _lastShown[key] = DateTime.now();
+    return _backend.banner(unit);
   }
 
   // --------------------------------------------------------- Interstitiel
@@ -130,33 +138,9 @@ class AdsService {
     if (!await canShow(key)) return;
     final p = _placements[key]!;
     final unit = _unitFor(p)!;
-
-    final completer = Completer<void>();
-    InterstitialAd.load(
-      adUnitId: unit,
-      request: const AdRequest(),
-      adLoadCallback: InterstitialAdLoadCallback(
-        onAdLoaded: (ad) {
-          _lastShown[key] = DateTime.now();
-          _log(key, p.format);
-          ad.fullScreenContentCallback = FullScreenContentCallback(
-            onAdDismissedFullScreenContent: (a) {
-              a.dispose();
-              if (!completer.isCompleted) completer.complete();
-            },
-            onAdFailedToShowFullScreenContent: (a, _) {
-              a.dispose();
-              if (!completer.isCompleted) completer.complete();
-            },
-          );
-          ad.show();
-        },
-        onAdFailedToLoad: (_) {
-          if (!completer.isCompleted) completer.complete();
-        },
-      ),
-    );
-    return completer.future;
+    _lastShown[key] = DateTime.now();
+    unawaited(_log(key, p.format));
+    await _backend.showInterstitial(unit);
   }
 
   // ----------------------------------------------------- Pub récompensée
@@ -166,8 +150,7 @@ class AdsService {
   /// Rend `null` si l'utilisateur abandonne, si la publicité ne charge pas,
   /// ou si la vérification serveur n'arrive pas à temps.
   ///
-  /// Cette méthode ne doit être appelée qu'après un geste explicite de
-  /// l'utilisateur (bouton « Regarder une vidéo »).
+  /// Ne doit être appelée qu'après un geste explicite de l'utilisateur.
   static Future<String?> showRewarded(String key) async {
     if (!await canShow(key)) return null;
     final p = _placements[key]!;
@@ -192,45 +175,15 @@ class AdsService {
         .single();
     final impressionId = row['id'] as String;
 
-    final completer = Completer<bool>();
-    RewardedAd.load(
+    _lastShown[key] = DateTime.now();
+    final earned = await _backend.showRewarded(
       adUnitId: unit,
-      request: const AdRequest(),
-      rewardedAdLoadCallback: RewardedAdLoadCallback(
-        onAdLoaded: (ad) {
-          // 2. On transmet l'identifiant d'impression à AdMob. Il nous
-          //    reviendra dans la callback SSV et permettra de relier la
-          //    récompense à la bonne ligne.
-          ad.setServerSideOptions(
-            ServerSideVerificationOptions(userId: me, customData: impressionId),
-          );
-
-          var earned = false;
-          ad.fullScreenContentCallback = FullScreenContentCallback(
-            onAdDismissedFullScreenContent: (a) {
-              a.dispose();
-              if (!completer.isCompleted) completer.complete(earned);
-            },
-            onAdFailedToShowFullScreenContent: (a, _) {
-              a.dispose();
-              if (!completer.isCompleted) completer.complete(false);
-            },
-          );
-
-          _lastShown[key] = DateTime.now();
-          ad.show(onUserEarnedReward: (_, __) => earned = true);
-        },
-        onAdFailedToLoad: (_) {
-          if (!completer.isCompleted) completer.complete(false);
-        },
-      ),
+      userId: me,
+      customData: impressionId,
     );
-
-    final earned = await completer.future;
     if (!earned) return null;
 
-    // 3. La callback SSV d'AdMob arrive de façon asynchrone. On attend
-    //    qu'elle ait marqué la ligne comme vérifiée.
+    // 2. La callback SSV d'AdMob arrive de façon asynchrone.
     final verified = await _waitForVerification(impressionId);
     return verified ? impressionId : null;
   }
