@@ -1,4 +1,4 @@
-package ci.ticonnect.ticonnect
+package com.ticonnect.app
 
 import io.flutter.embedding.android.FlutterActivity
 

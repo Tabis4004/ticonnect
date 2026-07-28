@@ -29,7 +29,7 @@ flutter config --no-analytics >/dev/null 2>&1 || true
 # Les dossiers de plateforme ne sont pas versionnés : on les génère ici.
 # La commande est idempotente et ne touche ni lib/ ni pubspec.yaml.
 echo "==> Génération de la plateforme web"
-flutter create . --platforms=web --project-name ticonnect --org ci.ticonnect
+flutter create . --platforms=web --project-name ticonnect --org com.ticonnect
 
 flutter pub get
 flutter build web --release

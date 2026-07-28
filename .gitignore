@@ -14,3 +14,4 @@ android/key.properties
 dev.json
 supabase/seed_dev.sql
 .wrangler/
+.wrangler/
