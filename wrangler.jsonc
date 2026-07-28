@@ -1,0 +1,15 @@
+{
+  // Déploiement du build web Flutter comme Worker à ressources statiques.
+  // Pas de script serveur : Cloudflare sert directement les fichiers.
+  "name": "ticonnect",
+  "compatibility_date": "2026-07-01",
+
+  "assets": {
+    "directory": "./build/web",
+
+    // Flutter web est une application à page unique : toute URL inconnue
+    // doit renvoyer index.html, sinon un rafraîchissement sur une route
+    // interne donne une 404.
+    "not_found_handling": "single-page-application"
+  }
+}
