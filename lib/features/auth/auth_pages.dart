@@ -12,6 +12,7 @@ import '../../services/location_service.dart';
 import '../../services/session.dart';
 import '../../widgets/common.dart';
 import '../../widgets/country_picker.dart';
+import '../../widgets/language_button.dart';
 import '../../widgets/location_map.dart';
 
 /// Connexion : pseudo (ou email, pour les comptes admin) et mot de passe.
@@ -55,9 +56,21 @@ class _SignInPageState extends State<SignInPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // Barre sans titre ni fond : elle n'existe que pour porter le sélecteur
+      // de langue. Sans lui, un anglophone sans compte reste bloqué sur un
+      // écran en français, la langue n'étant sinon déduite qu'à l'inscription.
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        // Le thème global met foregroundColor en blanc pour une barre verte :
+        // sur fond transparent l'icône serait invisible.
+        foregroundColor: AppTheme.primary,
+        elevation: 0,
+        toolbarHeight: 48,
+        actions: const [LanguageButton(), SizedBox(width: 8)],
+      ),
       body: SafeArea(
         child: ListView(padding: const EdgeInsets.all(24), children: [
-          const SizedBox(height: 32),
+          const SizedBox(height: 8),
           const Icon(Icons.handyman_rounded, size: 56, color: AppTheme.primary),
           const SizedBox(height: 20),
           const Text('Ticonnect',
@@ -232,7 +245,12 @@ class _SignUpPageState extends State<SignUpPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Créer un compte'.tr)),
+      appBar: AppBar(
+        title: Text('Créer un compte'.tr),
+        // Le sélecteur de pays plus bas réécrit aussi la langue : un choix
+        // manuel fait ici est écrasé si l'utilisateur change ensuite de pays.
+        actions: const [LanguageButton(), SizedBox(width: 8)],
+      ),
       body: ListView(padding: const EdgeInsets.all(24), children: [
         TextField(
           controller: _username,
