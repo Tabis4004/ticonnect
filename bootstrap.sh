@@ -11,7 +11,10 @@ echo "==> Récupération des dépendances"
 flutter pub get
 
 MANIFEST=android/app/src/main/AndroidManifest.xml
-ADMOB_APP_ID="ca-app-pub-3940256099942544~3347511713"  # ID de TEST Google
+# Identifiant d'APPLICATION AdMob (différent des identifiants de blocs).
+# AdMob → Applications → ton app → « ID d'application ». Note le ~ et non le /.
+#   ADMOB_APP_ID=ca-app-pub-XXXX~YYYY ./bootstrap.sh
+ADMOB_APP_ID="${ADMOB_APP_ID:-ca-app-pub-3940256099942544~3347511713}"  # défaut : ID de TEST Google
 
 echo "==> Configuration du manifeste Android"
 python3 - "$MANIFEST" "$ADMOB_APP_ID" <<'PY'

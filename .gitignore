@@ -13,3 +13,4 @@ android/key.properties
 # Identifiants de developpement : jamais dans le depot
 dev.json
 supabase/seed_dev.sql
+.wrangler/
