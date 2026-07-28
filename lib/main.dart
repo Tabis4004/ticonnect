@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/config.dart';
+import 'core/l10n.dart';
 import 'core/theme.dart';
 import 'features/auth/auth_pages.dart';
 import 'features/shell/app_shell.dart';
@@ -39,11 +40,17 @@ class TiconnectApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (_) => AppSession(),
-      child: MaterialApp(
-        title: 'Ticonnect',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light,
-        home: const _Gate(),
+      // L'arbre entier se reconstruit au changement de langue : les chaînes
+      // sont résolues à la construction, pas mises en cache.
+      child: ListenableBuilder(
+        listenable: L.instance,
+        builder: (context, _) => MaterialApp(
+          title: 'Ticonnect',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light,
+          locale: Locale(L.instance.lang),
+          home: const _Gate(),
+        ),
       ),
     );
   }
@@ -59,7 +66,7 @@ class _Gate extends StatelessWidget {
     if (session.loading) {
       return const Scaffold(body: Loading());
     }
-    if (!session.isSignedIn) return const PhoneInputPage();
+    if (!session.isSignedIn) return const SignInPage();
     return const AppShell();
   }
 }

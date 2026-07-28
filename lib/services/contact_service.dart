@@ -28,6 +28,31 @@ class ContactService {
     return row == null ? null : ContactDetails.fromMap(row);
   }
 
+  /// Enregistre ou met à jour les coordonnées de l'utilisateur connecté.
+  /// La ligne n'existe pas à l'inscription : elle est créée ici.
+  static Future<void> saveMine({
+    required String phone,
+    String? whatsapp,
+    String? email,
+  }) async {
+    await db.from('contact_details').upsert({
+      'profile_id': uid,
+      'phone': phone,
+      'whatsapp': whatsapp,
+      'email': email,
+    });
+  }
+
+  /// L'utilisateur connecté a-t-il renseigné un numéro ?
+  static Future<bool> hasMine() async {
+    final row = await db
+        .from('contact_details')
+        .select('phone')
+        .eq('profile_id', uid!)
+        .maybeSingle();
+    return row != null;
+  }
+
   static Future<bool> isUnlocked(String profileId) async {
     final row = await db
         .from('contact_unlocks')

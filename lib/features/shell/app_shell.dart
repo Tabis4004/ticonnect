@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/l10n.dart';
 import '../../services/session.dart';
 import '../chat/chat_pages.dart';
 import '../jobs/my_jobs_page.dart';
@@ -28,25 +29,37 @@ class _AppShellState extends State<AppShell> {
         : const [WorkerSearchPage(), MyJobsPage(), ConversationsPage(), ProfilePage()];
 
     final destinations = isWorker
-        ? const [
+        ? [
             NavigationDestination(
-                icon: Icon(Icons.work_outline), selectedIcon: Icon(Icons.work), label: 'Missions'),
+                icon: const Icon(Icons.work_outline),
+                selectedIcon: const Icon(Icons.work),
+                label: 'Missions'.tr),
             NavigationDestination(
-                icon: Icon(Icons.forum_outlined), selectedIcon: Icon(Icons.forum), label: 'Messages'),
+                icon: const Icon(Icons.forum_outlined),
+                selectedIcon: const Icon(Icons.forum),
+                label: 'Messages'.tr),
             NavigationDestination(
-                icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Compte'),
+                icon: const Icon(Icons.person_outline),
+                selectedIcon: const Icon(Icons.person),
+                label: 'Compte'.tr),
           ]
-        : const [
+        : [
             NavigationDestination(
-                icon: Icon(Icons.search), selectedIcon: Icon(Icons.search), label: 'Chercher'),
+                icon: const Icon(Icons.search),
+                selectedIcon: const Icon(Icons.search),
+                label: 'Chercher'.tr),
             NavigationDestination(
-                icon: Icon(Icons.assignment_outlined),
-                selectedIcon: Icon(Icons.assignment),
-                label: 'Demandes'),
+                icon: const Icon(Icons.assignment_outlined),
+                selectedIcon: const Icon(Icons.assignment),
+                label: 'Demandes'.tr),
             NavigationDestination(
-                icon: Icon(Icons.forum_outlined), selectedIcon: Icon(Icons.forum), label: 'Messages'),
+                icon: const Icon(Icons.forum_outlined),
+                selectedIcon: const Icon(Icons.forum),
+                label: 'Messages'.tr),
             NavigationDestination(
-                icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Compte'),
+                icon: const Icon(Icons.person_outline),
+                selectedIcon: const Icon(Icons.person),
+                label: 'Compte'.tr),
           ];
 
     final safeIndex = _index.clamp(0, pages.length - 1);

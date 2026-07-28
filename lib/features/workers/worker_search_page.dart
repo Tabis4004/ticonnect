@@ -23,6 +23,7 @@ class _WorkerSearchPageState extends State<WorkerSearchPage> {
   int? _categoryId;
   List<WorkerSearchResult> _results = [];
   bool _loading = true;
+  bool _onlyAvailable = true;
 
   @override
   void initState() {
@@ -57,6 +58,13 @@ class _WorkerSearchPageState extends State<WorkerSearchPage> {
     }
   }
 
+  /// Les profils indisponibles restent accessibles par la recherche, mais
+  /// sont masqués par défaut : proposer un ouvrier injoignable est le
+  /// meilleur moyen de perdre un client au premier essai.
+  List<WorkerSearchResult> get _visible => _onlyAvailable
+      ? _results.where((w) => w.availability == 'available').toList()
+      : _results;
+
   @override
   Widget build(BuildContext context) {
     final visibleTrades = _categoryId == null
@@ -88,6 +96,15 @@ class _WorkerSearchPageState extends State<WorkerSearchPage> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: FilterChip(
+                  avatar: const Icon(Icons.podcasts_rounded, size: 16),
+                  label: const Text('Disponibles'),
+                  selected: _onlyAvailable,
+                  onSelected: (v) => setState(() => _onlyAvailable = v),
+                ),
+              ),
               for (final c in _categories)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -129,7 +146,7 @@ class _WorkerSearchPageState extends State<WorkerSearchPage> {
         Expanded(
           child: _loading
               ? const Loading()
-              : _results.isEmpty
+              : _visible.isEmpty
                   ? const EmptyState(
                       icon: Icons.person_search_outlined,
                       title: 'Aucun ouvrier trouvé',
@@ -140,14 +157,14 @@ class _WorkerSearchPageState extends State<WorkerSearchPage> {
                   : RefreshIndicator(
                       onRefresh: _search,
                       child: ListView.builder(
-                        itemCount: _results.length,
+                        itemCount: _visible.length,
                         itemBuilder: (_, i) => WorkerCard(
-                          worker: _results[i],
+                          worker: _visible[i],
                           onTap: () => Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (_) => WorkerDetailPage(
-                                workerId: _results[i].profileId,
+                                workerId: _visible[i].profileId,
                               ),
                             ),
                           ),

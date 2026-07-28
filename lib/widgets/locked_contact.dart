@@ -45,6 +45,7 @@ class LockedContactCard extends StatefulWidget {
 class _LockedContactCardState extends State<LockedContactCard> {
   bool _unlocked = false;
   bool _busy = false;
+  bool _contactLoaded = false;
   ContactDetails? _contact;
 
   @override
@@ -55,8 +56,16 @@ class _LockedContactCardState extends State<LockedContactCard> {
   }
 
   Future<void> _loadContact() async {
-    final c = await ContactService.read(widget.targetProfileId);
-    if (mounted) setState(() => _contact = c);
+    ContactDetails? c;
+    try {
+      c = await ContactService.read(widget.targetProfileId);
+    } catch (_) {}
+    if (mounted) {
+      setState(() {
+        _contact = c;
+        _contactLoaded = true;
+      });
+    }
   }
 
   Future<void> _run(Future<UnlockResult> Function() action) async {
@@ -102,9 +111,15 @@ class _LockedContactCardState extends State<LockedContactCard> {
                 style: const TextStyle(fontWeight: FontWeight.w600)),
           ]),
           const SizedBox(height: 12),
-          if (phone == null)
+          if (!_contactLoaded)
             const Loading()
-          else ...[
+          else if (phone == null) ...[
+            const Text(
+              "Cette personne n'a pas encore renseigné son numéro. "
+              'Passe par la messagerie en attendant.',
+              style: TextStyle(color: Colors.black54),
+            ),
+          ] else ...[
             SelectableText(phone,
                 style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),

@@ -5,8 +5,10 @@ import '../../models/models.dart';
 import '../../services/ads_service.dart';
 import '../../services/catalog_service.dart';
 import '../../services/jobs_service.dart';
+import '../../services/notifications_service.dart';
 import '../../widgets/common.dart';
 import 'job_detail_page.dart';
+import 'notifications_page.dart';
 
 /// Fil des missions disponibles — écran d'accueil côté ouvrier.
 class JobFeedPage extends StatefulWidget {
@@ -21,6 +23,7 @@ class _JobFeedPageState extends State<JobFeedPage> {
   bool _loading = true;
   bool _onlyMyTrades = true;
   String? _urgency;
+  int _unread = 0;
 
   @override
   void initState() {
@@ -48,7 +51,11 @@ class _JobFeedPageState extends State<JobFeedPage> {
           : null;
 
       final r = await JobsService.search(tradeIds: ids, urgency: _urgency);
-      if (mounted) setState(() => _jobs = r);
+      final unread = await NotificationsService.unreadCount();
+      if (mounted) setState(() {
+        _jobs = r;
+        _unread = unread;
+      });
     } catch (e) {
       if (mounted) showError(context, humanError(e));
     } finally {
@@ -62,6 +69,38 @@ class _JobFeedPageState extends State<JobFeedPage> {
       appBar: AppBar(
         title: const Text('Missions disponibles'),
         actions: [
+          Stack(alignment: Alignment.center, children: [
+            IconButton(
+              icon: const Icon(Icons.notifications_none_rounded),
+              tooltip: 'Alertes',
+              onPressed: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const NotificationsPage()),
+                );
+                _load();
+              },
+            ),
+            if (_unread > 0)
+              Positioned(
+                right: 8,
+                top: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFC0392B),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Text(
+                    _unread > 9 ? '9+' : '$_unread',
+                    style: const TextStyle(
+                        fontSize: 10,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+          ]),
           IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
         ],
       ),

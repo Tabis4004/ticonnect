@@ -8,10 +8,16 @@ class CountryPickerButton extends StatelessWidget {
   final Country selected;
   final ValueChanged<Country> onChanged;
 
+  /// Affiche le nom du pays à côté de l'indicatif. Utile à l'inscription,
+  /// où le pays détermine aussi la langue ; superflu à côté d'un champ
+  /// téléphone, où seul l'indicatif compte.
+  final bool showName;
+
   const CountryPickerButton({
     super.key,
     required this.selected,
     required this.onChanged,
+    this.showName = false,
   });
 
   Future<void> _open(BuildContext context) async {
@@ -42,9 +48,18 @@ class CountryPickerButton extends StatelessWidget {
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Text(selected.flag, style: const TextStyle(fontSize: 20)),
-          const SizedBox(width: 6),
+          const SizedBox(width: 8),
+          if (showName) ...[
+            Text(selected.name,
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+            const SizedBox(width: 8),
+          ],
           Text(selected.dialCode,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              style: TextStyle(
+                fontSize: showName ? 14 : 16,
+                fontWeight: FontWeight.w600,
+                color: showName ? Colors.black54 : Colors.black87,
+              )),
           const Icon(Icons.arrow_drop_down, color: Colors.black45),
         ]),
       ),
@@ -104,6 +119,8 @@ class _CountrySheetState extends State<_CountrySheet> {
                 return ListTile(
                   leading: Text(c.flag, style: const TextStyle(fontSize: 24)),
                   title: Text(c.name),
+                  subtitle: Text(c.nameEn == c.name ? '' : c.nameEn,
+                      style: const TextStyle(fontSize: 11)),
                   trailing: Text(c.dialCode,
                       style: const TextStyle(
                           fontWeight: FontWeight.w600, color: AppTheme.primary)),

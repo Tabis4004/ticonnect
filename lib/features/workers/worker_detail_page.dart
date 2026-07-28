@@ -63,6 +63,10 @@ class _WorkerDetailPageState extends State<WorkerDetailPage> {
     final r = await ContactService.unlockWorker(widget.workerId);
     if (r.ok) {
       _contact = await ContactService.read(widget.workerId);
+      if (_contact == null && mounted) {
+        showError(context,
+            "Cet ouvrier n'a pas encore renseigné son numéro. Écris-lui.");
+      }
     } else if (mounted) {
       showError(context, r.message ?? 'Impossible pour le moment');
     }

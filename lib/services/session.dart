@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../core/l10n.dart';
 import '../core/supabase.dart';
 import '../models/models.dart';
 import 'auth_service.dart';
@@ -55,11 +56,26 @@ class AppSession extends ChangeNotifier {
           : Wallet.fromMap(rows[2] as Map<String, dynamic>);
 
       isAdmin = await AuthService.isAdmin();
+
+      // La langue de l'interface suit le profil, lui-même initialisé depuis
+      // le pays choisi à l'inscription.
+      L.instance.setLanguage(
+        (rows[0] as Map<String, dynamic>?)?['preferred_language'] as String?,
+      );
     } catch (_) {
       // Hors ligne : on garde l'état précédent plutôt que de vider l'écran.
     }
 
     loading = false;
+    notifyListeners();
+  }
+
+  /// Change la langue et la mémorise sur le profil.
+  Future<void> setLanguage(String code) async {
+    L.instance.setLanguage(code);
+    if (uid != null) {
+      await db.from('profiles').update({'preferred_language': code}).eq('id', uid!);
+    }
     notifyListeners();
   }
 

@@ -19,7 +19,14 @@ import re, sys
 path, app_id = sys.argv[1], sys.argv[2]
 xml = open(path, encoding='utf-8').read()
 
-# Permission Internet
+# Permissions : Internet, et localisation (facultative cote utilisateur)
+for perm in ('android.permission.ACCESS_COARSE_LOCATION',
+             'android.permission.ACCESS_FINE_LOCATION'):
+    if perm not in xml:
+        xml = re.sub(r'(<manifest[^>]*>)',
+                     r'\1\n    <uses-permission android:name="' + perm + '"/>',
+                     xml, count=1)
+
 if 'android.permission.INTERNET' not in xml:
     xml = xml.replace('<manifest',
         '<manifest', 1)

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/l10n.dart';
 import '../../core/supabase.dart';
 import '../../core/theme.dart';
 import '../../models/models.dart';
@@ -10,18 +11,39 @@ import '../../services/workers_service.dart';
 import '../../widgets/common.dart';
 import '../worker/wallet_page.dart';
 import 'admin_page.dart';
+import 'contact_page.dart';
 
-class ProfilePage extends StatelessWidget {
+class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  bool _switching = false;
+
+  /// Disponibilité : c'est ce drapeau qui décide si l'ouvrier remonte dans
+  /// l'annuaire et s'il reçoit les alertes de nouvelles missions.
+  Future<void> _toggleAvailability(bool available) async {
+    setState(() => _switching = true);
+    try {
+      await WorkersService.setAvailability(available ? 'available' : 'unavailable');
+      if (mounted) await context.read<AppSession>().refresh();
+    } catch (e) {
+      if (mounted) showError(context, humanError(e));
+    }
+    if (mounted) setState(() => _switching = false);
+  }
 
   @override
   Widget build(BuildContext context) {
     final session = context.watch<AppSession>();
     final p = session.profile;
     if (p == null) return const Scaffold(body: Loading());
+    final available = session.worker?.availability == 'available';
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Mon compte')),
+      appBar: AppBar(title: Text('Mon compte'.tr)),
       body: ListView(children: [
         Container(
           color: Colors.white,
@@ -39,8 +61,10 @@ class ProfilePage extends StatelessWidget {
             const SizedBox(height: 12),
             Text(p.fullName,
                 style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            Text(p.isWorker ? 'Ouvrier' : 'Client',
-                style: const TextStyle(color: Colors.black54)),
+            Text(
+              p.username != null ? '@${p.username}' : (p.isWorker ? 'Ouvrier' : 'Client'),
+              style: const TextStyle(color: Colors.black54),
+            ),
             if (session.worker != null) ...[
               const SizedBox(height: 8),
               RatingStars(
@@ -52,10 +76,55 @@ class ProfilePage extends StatelessWidget {
           ]),
         ),
         const SizedBox(height: 12),
+        ListTile(
+          leading: const Icon(Icons.translate),
+          title: Text('Langue'.tr),
+          trailing: DropdownButton<String>(
+            value: L.instance.lang,
+            underline: const SizedBox.shrink(),
+            items: [
+              for (final e in L.supported.entries)
+                DropdownMenuItem(value: e.key, child: Text(e.value)),
+            ],
+            onChanged: (v) {
+              if (v != null) context.read<AppSession>().setLanguage(v);
+            },
+          ),
+        ),
+        const Divider(height: 1),
+        ListTile(
+          leading: const Icon(Icons.contact_phone_outlined),
+          title: Text('Mes coordonnées'.tr),
+          subtitle: Text('Téléphone, WhatsApp, email, position'.tr),
+          onTap: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ContactPage()),
+            );
+            if (context.mounted) await context.read<AppSession>().refresh();
+          },
+        ),
+        const Divider(height: 1),
         if (p.isWorker) ...[
+          SwitchListTile(
+            secondary: Icon(
+              available ? Icons.podcasts_rounded : Icons.pause_circle_outline,
+              color: available ? AppTheme.primary : Colors.black45,
+            ),
+            title: Text(available ? 'Disponible'.tr : 'Indisponible'.tr),
+            subtitle: Text(
+              available
+                  ? 'Tu apparais dans l\'annuaire et reçois les alertes.'
+                  : 'Masqué de l\'annuaire, aucune alerte.',
+              style: const TextStyle(fontSize: 12),
+            ),
+            value: available,
+            onChanged: _switching ? null : _toggleAvailability,
+          ),
+          const Divider(height: 1),
           ListTile(
             leading: const Icon(Icons.toll_outlined),
-            title: const Text('Mes crédits'),
+            title: Text('Mes crédits'.tr),
             trailing: Text('${session.credits}',
                 style: const TextStyle(fontWeight: FontWeight.bold)),
             onTap: () => Navigator.push(
@@ -66,8 +135,8 @@ class ProfilePage extends StatelessWidget {
           const Divider(height: 1),
           ListTile(
             leading: const Icon(Icons.handyman_outlined),
-            title: const Text('Mon profil ouvrier'),
-            subtitle: const Text('Métiers, tarifs, disponibilité'),
+            title: Text('Mon profil ouvrier'.tr),
+            subtitle: Text('Métiers, tarifs, disponibilité'.tr),
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const WorkerSetupPage()),
@@ -76,7 +145,7 @@ class ProfilePage extends StatelessWidget {
         ] else
           ListTile(
             leading: const Icon(Icons.construction_outlined),
-            title: const Text('Devenir ouvrier'),
+            title: Text('Devenir ouvrier'.tr),
             subtitle: const Text('Recevoir des missions près de chez toi'),
             onTap: () => Navigator.push(
               context,
@@ -87,7 +156,7 @@ class ProfilePage extends StatelessWidget {
           const Divider(height: 1),
           ListTile(
             leading: const Icon(Icons.shield_outlined, color: AppTheme.primary),
-            title: const Text('Administration'),
+            title: Text('Administration'.tr),
             subtitle: const Text('Statistiques, signalements, fuite de contacts'),
             onTap: () => Navigator.push(
               context,
@@ -98,8 +167,8 @@ class ProfilePage extends StatelessWidget {
         const Divider(height: 1),
         ListTile(
           leading: const Icon(Icons.logout, color: AppTheme.danger),
-          title: const Text('Se déconnecter',
-              style: TextStyle(color: AppTheme.danger)),
+          title: Text('Se déconnecter'.tr,
+              style: const TextStyle(color: AppTheme.danger)),
           onTap: () => context.read<AppSession>().signOut(),
         ),
       ]),
@@ -192,7 +261,7 @@ class _WorkerSetupPageState extends State<WorkerSetupPage> {
     final visible = _trades.where((t) => t.categoryId == _categoryId).toList();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Mon profil ouvrier')),
+      appBar: AppBar(title: Text('Mon profil ouvrier'.tr)),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         TextField(
           controller: _headline,

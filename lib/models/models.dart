@@ -13,6 +13,7 @@ DateTime? _dt(dynamic v) => v == null ? null : DateTime.parse(v as String).toLoc
 class Profile {
   final String id;
   final String fullName;
+  final String? username;
   final String role; // client | worker | both
   final String? avatarUrl;
   final String? bio;
@@ -26,6 +27,7 @@ class Profile {
     required this.fullName,
     required this.role,
     required this.countryCode,
+    this.username,
     this.avatarUrl,
     this.bio,
     this.city,
@@ -39,6 +41,7 @@ class Profile {
   factory Profile.fromMap(Map<String, dynamic> m) => Profile(
         id: m['id'] as String,
         fullName: m['full_name'] as String? ?? 'Utilisateur',
+        username: m['username'] as String?,
         role: m['role'] as String? ?? 'client',
         countryCode: m['country_code'] as String? ?? 'CI',
         avatarUrl: m['avatar_url'] as String?,
