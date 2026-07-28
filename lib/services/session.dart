@@ -1,0 +1,69 @@
+import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../core/supabase.dart';
+import '../models/models.dart';
+
+/// État de session : utilisateur connecté, profil, profil ouvrier, crédits.
+///
+/// Un seul objet observable pour toute l'app, exposé via Provider. Évite
+/// d'aller relire la base à chaque écran pour savoir qui est connecté.
+class Session extends ChangeNotifier {
+  Profile? profile;
+  WorkerProfile? worker;
+  Wallet? wallet;
+  bool loading = true;
+
+  Session() {
+    db.auth.onAuthStateChange.listen((_) => refresh());
+    refresh();
+  }
+
+  bool get isSignedIn => db.auth.currentUser != null;
+  bool get needsProfile => isSignedIn && profile == null;
+  bool get isWorker => profile?.isWorker ?? false;
+  int get credits => wallet?.balance ?? 0;
+
+  Future<void> refresh() async {
+    final id = uid;
+    if (id == null) {
+      profile = null;
+      worker = null;
+      wallet = null;
+      loading = false;
+      notifyListeners();
+      return;
+    }
+
+    try {
+      final rows = await Future.wait([
+        db.from('profiles').select().eq('id', id).maybeSingle(),
+        db.from('worker_profiles').select().eq('profile_id', id).maybeSingle(),
+        db.from('credit_wallets').select().eq('profile_id', id).maybeSingle(),
+      ]);
+
+      profile = rows[0] == null
+          ? null
+          : Profile.fromMap(rows[0] as Map<String, dynamic>);
+      worker = rows[1] == null
+          ? null
+          : WorkerProfile.fromMap(rows[1] as Map<String, dynamic>);
+      wallet = rows[2] == null
+          ? null
+          : Wallet.fromMap(rows[2] as Map<String, dynamic>);
+    } catch (_) {
+      // Hors ligne : on garde l'état précédent plutôt que de vider l'écran.
+    }
+
+    loading = false;
+    notifyListeners();
+  }
+
+  Future<void> signOut() async {
+    await db.auth.signOut();
+    profile = null;
+    worker = null;
+    wallet = null;
+    notifyListeners();
+  }
+}
