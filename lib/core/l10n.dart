@@ -66,6 +66,14 @@ class L extends ChangeNotifier {
     'Ton nom': 'Your name',
     'Tu viens pour…': "You're here to…",
     'Ton pays': 'Your country',
+    'Ta ville': 'Your city',
+    'Entre ta ville': 'Enter your city',
+    'Ma position': 'My location',
+    'Position indisponible': 'Location unavailable',
+    'Te fait apparaître en priorité auprès des personnes les plus proches. '
+            'Seule une distance en kilomètres est visible, jamais ton adresse.':
+        'Puts you first for the people closest to you. Only a distance in '
+            'kilometres is shown, never your address.',
     "Détermine la langue de l'application et l'indicatif téléphonique.":
         'Sets the app language and the phone country code.',
     'Trouver un ouvrier': 'Find a worker',

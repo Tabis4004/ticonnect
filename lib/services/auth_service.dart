@@ -70,6 +70,7 @@ class AuthService {
     required String fullName,
     String role = 'client',
     Country? country,
+    String? city,
   }) async {
     final c = country ?? Countries.byCode(AppConfig.defaultCountry);
     await db.auth.signUp(
@@ -83,6 +84,7 @@ class AuthService {
         // Langue déduite du pays : personne ne devrait avoir à chercher
         // où changer la langue avant de comprendre l'écran d'accueil.
         'preferred_language': L.resolve(c.lang),
+        if (city != null && city.trim().isNotEmpty) 'city': city.trim(),
       },
     );
   }

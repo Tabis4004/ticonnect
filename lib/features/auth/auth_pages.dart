@@ -8,9 +8,11 @@ import '../../core/l10n.dart';
 import '../../core/supabase.dart';
 import '../../core/theme.dart';
 import '../../services/auth_service.dart';
+import '../../services/location_service.dart';
 import '../../services/session.dart';
 import '../../widgets/common.dart';
 import '../../widgets/country_picker.dart';
+import '../../widgets/location_map.dart';
 
 /// Connexion : pseudo (ou email, pour les comptes admin) et mot de passe.
 class SignInPage extends StatefulWidget {
@@ -121,17 +123,20 @@ class _SignUpPageState extends State<SignUpPage> {
   final _username = TextEditingController();
   final _password = TextEditingController();
   final _fullName = TextEditingController();
+  final _city = TextEditingController();
 
   Country _country = Countries.byCode(AppConfig.defaultCountry);
   String _role = 'client';
   bool _busy = false;
   bool _hide = true;
+  bool _locating = false;
   String? _usernameError;
   bool? _usernameFree;
+  ({double lat, double lon})? _position;
 
   @override
   void dispose() {
-    for (final c in [_username, _password, _fullName]) {
+    for (final c in [_username, _password, _fullName, _city]) {
       c.dispose();
     }
     super.dispose();
@@ -155,6 +160,19 @@ class _SignUpPageState extends State<SignUpPage> {
     });
   }
 
+  Future<void> _locate() async {
+    setState(() => _locating = true);
+    final pos = await LocationService.current();
+    if (!mounted) return;
+    setState(() {
+      _locating = false;
+      if (pos != null) _position = pos;
+    });
+    if (pos == null && mounted) {
+      showError(context, 'Position indisponible'.tr);
+    }
+  }
+
   Future<void> _submit() async {
     final v = _username.text.trim().toLowerCase();
     final formatError = AuthService.validateUsername(v);
@@ -170,6 +188,12 @@ class _SignUpPageState extends State<SignUpPage> {
       showError(context, 'Entre ton nom'.tr);
       return;
     }
+    // La ville conditionne tout le reste : sans elle, un ouvrier ne reçoit
+    // aucune alerte et n'apparaît dans aucune recherche locale.
+    if (_city.text.trim().length < 2) {
+      showError(context, 'Entre ta ville'.tr);
+      return;
+    }
     setState(() => _busy = true);
     try {
       if (!await AuthService.usernameAvailable(v)) {
@@ -182,7 +206,19 @@ class _SignUpPageState extends State<SignUpPage> {
         fullName: _fullName.text,
         country: _country,
         role: _role,
+        city: _city.text,
       );
+
+      // La position ne peut être écrite qu'une fois la session ouverte :
+      // la fonction SQL s'appuie sur auth.uid().
+      if (_position != null) {
+        try {
+          await LocationService.save(_position!.lat, _position!.lon);
+        } catch (_) {
+          // Position perdue mais compte créé : réglable depuis Mes coordonnées.
+        }
+      }
+
       if (!mounted) return;
       await context.read<AppSession>().refresh();
       if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
@@ -262,6 +298,69 @@ class _SignUpPageState extends State<SignUpPage> {
             },
           ),
         ),
+        const SizedBox(height: 20),
+        TextField(
+          controller: _city,
+          textCapitalization: TextCapitalization.words,
+          decoration: InputDecoration(
+            labelText: 'Ta ville'.tr,
+            hintText: 'Abidjan',
+            prefixIcon: const Icon(Icons.place_outlined),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Row(children: [
+          Expanded(
+            child: Text('Ma position'.tr,
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+          ),
+          Text('Facultatif'.tr,
+              style: const TextStyle(fontSize: 12, color: Colors.black45)),
+        ]),
+        const SizedBox(height: 4),
+        Text(
+          'Te fait apparaître en priorité auprès des personnes les plus '
+                  'proches. Seule une distance en kilomètres est visible, '
+                  'jamais ton adresse.'
+              .tr,
+          style: const TextStyle(fontSize: 12, color: Colors.black45),
+        ),
+        const SizedBox(height: 10),
+        if (_position != null) ...[
+          LocationMap(
+            lat: _position!.lat,
+            lon: _position!.lon,
+            height: 150,
+            onMoved: (p) => setState(() => _position = p),
+          ),
+          const SizedBox(height: 6),
+          Row(children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _locating ? null : _locate,
+                icon: const Icon(Icons.my_location),
+                label: Text('Actualiser'.tr),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => setState(() => _position = null),
+                icon: const Icon(Icons.location_off_outlined,
+                    color: AppTheme.danger),
+                label: Text('Retirer'.tr,
+                    style: const TextStyle(color: AppTheme.danger)),
+              ),
+            ),
+          ]),
+        ] else if (_locating)
+          const Loading()
+        else
+          OutlinedButton.icon(
+            onPressed: _locate,
+            icon: const Icon(Icons.my_location),
+            label: Text('Utiliser ma position'.tr),
+          ),
         const SizedBox(height: 24),
         Text('Tu viens pour…'.tr,
             style: const TextStyle(fontWeight: FontWeight.w600)),
