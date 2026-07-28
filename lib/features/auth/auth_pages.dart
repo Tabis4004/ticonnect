@@ -69,9 +69,9 @@ class _SignInPageState extends State<SignInPage> {
           TextField(
             controller: _identifier,
             autocorrect: false,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'Pseudo'.tr,
-              prefixIcon: Icon(Icons.person_outline),
+              prefixIcon: const Icon(Icons.person_outline),
             ),
           ),
           const SizedBox(height: 12),
@@ -121,8 +121,6 @@ class _SignUpPageState extends State<SignUpPage> {
   final _username = TextEditingController();
   final _password = TextEditingController();
   final _fullName = TextEditingController();
-  final _phone = TextEditingController();
-  final _city = TextEditingController();
 
   Country _country = Countries.byCode(AppConfig.defaultCountry);
   String _role = 'client';
@@ -133,7 +131,7 @@ class _SignUpPageState extends State<SignUpPage> {
 
   @override
   void dispose() {
-    for (final c in [_username, _password, _fullName, _phone, _city]) {
+    for (final c in [_username, _password, _fullName]) {
       c.dispose();
     }
     super.dispose();
@@ -172,11 +170,6 @@ class _SignUpPageState extends State<SignUpPage> {
       showError(context, 'Entre ton nom'.tr);
       return;
     }
-    if (_phone.text.trim().length < 6) {
-      showError(context, 'Entre ton numéro de téléphone');
-      return;
-    }
-
     setState(() => _busy = true);
     try {
       if (!await AuthService.usernameAvailable(v)) {
@@ -187,10 +180,8 @@ class _SignUpPageState extends State<SignUpPage> {
         username: v,
         password: _password.text,
         fullName: _fullName.text,
-        phone: _phone.text,
         country: _country,
         role: _role,
-        city: _city.text,
       );
       if (!mounted) return;
       await context.read<AppSession>().refresh();
@@ -245,47 +236,10 @@ class _SignUpPageState extends State<SignUpPage> {
         TextField(
           controller: _fullName,
           textCapitalization: TextCapitalization.words,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Ton nom'.tr,
             hintText: 'Ibrahim Traoré',
-            prefixIcon: Icon(Icons.badge_outlined),
-          ),
-        ),
-        const SizedBox(height: 20),
-        const Text('Ton numéro de téléphone',
-            style: TextStyle(fontWeight: FontWeight.w600)),
-        const SizedBox(height: 8),
-        Row(children: [
-          CountryPickerButton(
-            selected: _country,
-            onChanged: (c) => setState(() => _country = c),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: TextField(
-              controller: _phone,
-              keyboardType: TextInputType.phone,
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9 +]')),
-              ],
-              decoration: const InputDecoration(hintText: '07 58 22 91 40'),
-            ),
-          ),
-        ]),
-        const SizedBox(height: 8),
-        const Text(
-          'Ce numéro reste privé. Il ne sera visible que par les personnes '
-          'avec qui tu choisis de travailler.',
-          style: TextStyle(fontSize: 12, color: Colors.black45),
-        ),
-        const SizedBox(height: 20),
-        TextField(
-          controller: _city,
-          textCapitalization: TextCapitalization.words,
-          decoration: const InputDecoration(
-            labelText: 'Ta ville',
-            hintText: 'Abidjan',
-            prefixIcon: Icon(Icons.place_outlined),
+            prefixIcon: const Icon(Icons.badge_outlined),
           ),
         ),
         const SizedBox(height: 24),

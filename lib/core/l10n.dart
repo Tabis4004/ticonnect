@@ -85,7 +85,6 @@ class L extends ChangeNotifier {
     'Alertes': 'Alerts',
 
     // Recherche d'ouvriers
-    'Trouver un ouvrier': 'Find a worker',
     'Maçon, chauffeur, plombier…': 'Mason, driver, plumber…',
     'Disponibles': 'Available',
     'Aucun ouvrier trouvé': 'No worker found',
