@@ -4,7 +4,7 @@ publish_to: 'none'
 # versionName+versionCode. Le versionCode (après le +) doit strictement
 # augmenter à chaque AAB déposé sur la Play Console : un numéro déjà utilisé
 # est refusé définitivement, même si le dépôt a été supprimé.
-version: 1.0.0+1
+version: 2.0.0+2
 
 environment:
   sdk: '>=3.4.0 <4.0.0'

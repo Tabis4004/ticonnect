@@ -1,0 +1,22 @@
+# Modèle pour android/key.properties (lui, non versionné).
+#
+# Copier ce fichier en `key.properties` dans le même dossier, puis remplacer
+# les valeurs par celles du keystore d'upload. Sans ce fichier, le build
+# release retombe sur la clé de debug et l'AAB est refusé par la Play Console.
+#
+# Générer le keystore (une seule fois, à conserver précieusement) :
+#
+#   keytool -genkey -v -keystore ~/upload-keystore-ticonnect.jks \
+#     -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+#
+# Perdre ce fichier .jks ou son mot de passe oblige à demander une
+# réinitialisation de la clé d'upload à Google.
+
+storePassword=motDePasseDuKeystore
+keyPassword=motDePasseDeLaCle
+keyAlias=upload
+
+# Chemin vers le .jks. Absolu, ou relatif au dossier android/.
+# Garder le keystore HORS du dépôt (ex. dans le home) évite de le committer
+# par accident.
+storeFile=/Users/tabistabis.tg/upload-keystore-ticonnect.jks
