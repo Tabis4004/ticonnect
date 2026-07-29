@@ -1,1 +1,13 @@
-google.com, pub-8598122123361799, DIRECT, f08c47fec0942fa0
+# Authorized Sellers for Apps (norme IAB).
+#
+# Déclare qui a le droit de vendre l'inventaire publicitaire de Ticonnect.
+# Un ID d'éditeur erroné revient à déclarer que personne n'est autorisé :
+# les annonceurs cessent d'acheter.
+#
+# L'ID doit être celui de la console AdMob, Paramètres du compte >
+# ID de l'éditeur. C'est aussi le préfixe des unités publicitaires
+# (ca-app-pub-<ID>/<unité>).
+#
+# Servi à la racine du site par le build web Flutter : le contenu de web/
+# est copié tel quel dans build/web, que Cloudflare publie.
+google.com, pub-4233753695775705, DIRECT, f08c47fec0942fa0
