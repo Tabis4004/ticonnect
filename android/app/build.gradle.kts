@@ -81,6 +81,14 @@ android {
 
     buildTypes {
         release {
+            // Sans ces règles, R8 supprime le constructeur de
+            // WorkDatabase_Impl et l'application plante au lancement.
+            // Voir proguard-rules.pro pour le détail.
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+
             signingConfig = if (keystorePropertiesFile.exists()) {
                 signingConfigs.getByName("release")
             } else {
