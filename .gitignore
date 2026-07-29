@@ -7,6 +7,7 @@ build/
 *.iml
 .DS_Store
 android/key.properties
+android/admob.properties
 *.keystore
 *.jks
 

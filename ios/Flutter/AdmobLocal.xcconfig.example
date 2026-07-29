@@ -1,0 +1,11 @@
+// App ID AdMob iOS réel.
+//
+// Copier ce fichier en ios/Flutter/AdmobLocal.xcconfig (non versionné) et y
+// mettre l'App ID de la fiche iOS, ou lancer ./set_admob_app_id.sh depuis la
+// racine du projet.
+//
+// Attention : AdMob crée une fiche par plateforme. L'App ID iOS est différent
+// de l'App ID Android, les deux ne sont pas interchangeables.
+//
+// Format attendu : ca-app-pub-<16 chiffres>~<10 chiffres>
+ADMOB_APP_ID=ca-app-pub-0000000000000000~0000000000

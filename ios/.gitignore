@@ -32,3 +32,6 @@ Runner/GeneratedPluginRegistrant.*
 !default.mode2v3
 !default.pbxuser
 !default.perspectivev3
+
+# App ID AdMob reel : hors du depot public (voir AdmobLocal.xcconfig.example)
+Flutter/AdmobLocal.xcconfig

@@ -1,0 +1,15 @@
+# App ID AdMob de l'application Android.
+#
+# Copier ce fichier en android/admob.properties (non versionné) et y mettre
+# l'App ID réel, ou lancer ./set_admob_app_id.sh depuis la racine du projet.
+#
+# Où le trouver : console AdMob > Applications > Ticonnect > Paramètres de
+# l'application > ID de l'application. Une application « non listée sur un
+# store » suffit pour en obtenir un : le passage sur le Play Store n'est pas
+# un prérequis.
+#
+# Sans ce fichier, le build utilise l'App ID de test de Google. L'application
+# démarre et se publie normalement, mais ne sert aucune vraie publicité.
+#
+# Format attendu : ca-app-pub-<16 chiffres>~<10 chiffres>
+admobAppId=ca-app-pub-0000000000000000~0000000000

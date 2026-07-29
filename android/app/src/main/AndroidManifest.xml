@@ -34,9 +34,13 @@
             android:name="flutterEmbedding"
             android:value="2" />
     
+        <!-- Injecté par android/app/build.gradle.kts : App ID de test Google
+             par défaut, vraie valeur si android/admob.properties existe.
+             Ne jamais mettre un placeholder littéral ici : le SDK valide l'ID
+             au démarrage et fait planter l'application s'il est invalide. -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-XXXX~YYYY"/>
+            android:value="${admobAppId}"/>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

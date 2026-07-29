@@ -22,6 +22,27 @@ if (keystorePropertiesFile.exists()) {
     keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
 }
 
+// App ID AdMob.
+//
+// Le SDK Google Mobile Ads lit cette valeur dans le manifeste depuis un
+// ContentProvider qui s'exécute AVANT le premier écran : un ID absent ou mal
+// formé fait planter l'application au démarrage, sans que le code Dart puisse
+// intercepter quoi que ce soit. La valeur doit donc toujours être valide, même
+// avant d'avoir un compte AdMob configuré.
+//
+// Par défaut on utilise l'App ID de test publié par Google : l'application
+// démarre et se publie normalement, sans jamais servir de vraie publicité.
+// Pour passer en production, créer android/admob.properties (non versionné,
+// voir admob.properties.example) ou lancer ./set_admob_app_id.sh.
+val admobProperties = Properties()
+val admobPropertiesFile = rootProject.file("admob.properties")
+if (admobPropertiesFile.exists()) {
+    admobPropertiesFile.inputStream().use { admobProperties.load(it) }
+}
+val admobAppId: String =
+    admobProperties.getProperty("admobAppId")?.takeIf { it.isNotBlank() }
+        ?: "ca-app-pub-3940256099942544~3347511713"
+
 android {
     namespace = "com.ticonnect.app"
     compileSdk = flutter.compileSdkVersion
@@ -41,6 +62,8 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        manifestPlaceholders["admobAppId"] = admobAppId
     }
 
     signingConfigs {

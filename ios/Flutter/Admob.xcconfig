@@ -1,0 +1,14 @@
+// App ID AdMob injecté dans Info.plist via $(ADMOB_APP_ID).
+//
+// Comme sur Android, le SDK Google Mobile Ads lit cette valeur au lancement et
+// fait planter l'application si elle est absente ou mal formée. La valeur par
+// défaut est l'App ID de test publié par Google : l'application démarre et se
+// publie normalement, sans servir de vraie publicité.
+//
+// Pour la production, créer ios/Flutter/AdmobLocal.xcconfig (non versionné,
+// voir AdmobLocal.xcconfig.example) ou lancer ./set_admob_app_id.sh depuis la
+// racine du projet. L'include ci-dessous est optionnel : son absence n'empêche
+// pas le build.
+ADMOB_APP_ID=ca-app-pub-3940256099942544~1458002511
+
+#include? "AdmobLocal.xcconfig"
