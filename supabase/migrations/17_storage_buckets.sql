@@ -35,6 +35,16 @@ on conflict (id) do update
 -- =====================================================================
 
 -- ---------------------------------------------------------- Buckets publics
+--
+-- Aucune politique SELECT n'est créée sur les buckets publics, et c'est
+-- délibéré. Un bucket marqué `public` sert ses objets par URL directe sans
+-- passer par la RLS : une politique de lecture n'ajoute rien à l'affichage,
+-- mais elle autorise le LIST. N'importe quel client pourrait alors énumérer
+-- tous les avatars, portfolios et photos de mission de la plateforme, et en
+-- déduire qui est inscrit et sur quels chantiers.
+--
+-- Seules les écritures sont encadrées : chacun n'écrit que sous le dossier
+-- portant son propre identifiant.
 do $$
 declare
   b text;
@@ -42,11 +52,6 @@ begin
   foreach b in array array['avatars', 'portfolio', 'job-photos'] loop
     execute format(
       'drop policy if exists %I on storage.objects', b || '_read_all');
-    execute format($p$
-      create policy %I on storage.objects
-        for select to public
-        using (bucket_id = %L)
-    $p$, b || '_read_all', b);
 
     execute format(
       'drop policy if exists %I on storage.objects', b || '_write_own');
