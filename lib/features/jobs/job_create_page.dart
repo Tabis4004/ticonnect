@@ -50,10 +50,12 @@ class _JobCreatePageState extends State<JobCreatePage> {
     super.initState();
     CatalogService.categories().then((c) async {
       final t = await CatalogService.trades();
-      if (mounted) setState(() {
-        _categories = c;
-        _trades = t;
-      });
+      if (mounted) {
+        setState(() {
+          _categories = c;
+          _trades = t;
+        });
+      }
     });
     _maybeShowEntryAd();
   }

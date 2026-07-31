@@ -221,12 +221,12 @@ class _ContactPageState extends State<ContactPage> {
         ]),
 
         const SizedBox(height: 24),
-        Row(children: [
-          const Expanded(
+        const Row(children: [
+          Expanded(
             child: Text('Ma position sur la carte',
                 style: TextStyle(fontWeight: FontWeight.w600)),
           ),
-          const Text('Facultatif',
+          Text('Facultatif',
               style: TextStyle(fontSize: 12, color: Colors.black45)),
         ]),
         const SizedBox(height: 4),

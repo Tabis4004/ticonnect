@@ -1,5 +1,3 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
-
 import '../core/config.dart';
 import '../core/countries.dart';
 import '../core/l10n.dart';

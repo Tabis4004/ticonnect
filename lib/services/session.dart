@@ -86,9 +86,7 @@ class AppSession extends ChangeNotifier {
 
       // La langue de l'interface suit le profil, lui-même initialisé depuis
       // le pays choisi à l'inscription.
-      L.instance.setLanguage(
-        (rows[0] as Map<String, dynamic>?)?['preferred_language'] as String?,
-      );
+      L.instance.setLanguage(rows[0]?['preferred_language'] as String?);
     } catch (_) {
       // Hors ligne : on garde l'état précédent plutôt que de vider l'écran.
     }

@@ -378,8 +378,8 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
           child: _busy
               ? const Loading()
               : isCurrent
-                  ? OutlinedButton(
-                      onPressed: null, child: const Text('Ton plan actuel'))
+                  ? const OutlinedButton(
+                      onPressed: null, child: Text('Ton plan actuel'))
                   : FilledButton(
                       onPressed: price == null ? null : () => _subscribe(plan),
                       child: Text(price == null

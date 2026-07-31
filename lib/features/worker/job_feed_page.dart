@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../core/supabase.dart';
 import '../../models/models.dart';
 import '../../services/ads_service.dart';
-import '../../services/catalog_service.dart';
 import '../../services/jobs_service.dart';
 import '../../services/notifications_service.dart';
 import '../../widgets/common.dart';
@@ -52,10 +51,12 @@ class _JobFeedPageState extends State<JobFeedPage> {
 
       final r = await JobsService.search(tradeIds: ids, urgency: _urgency);
       final unread = await NotificationsService.unreadCount();
-      if (mounted) setState(() {
-        _jobs = r;
-        _unread = unread;
-      });
+      if (mounted) {
+        setState(() {
+          _jobs = r;
+          _unread = unread;
+        });
+      }
     } catch (e) {
       if (mounted) showError(context, humanError(e));
     } finally {

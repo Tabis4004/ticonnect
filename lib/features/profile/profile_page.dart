@@ -348,6 +348,11 @@ class _WorkerSetupPageState extends State<WorkerSetupPage> {
     _categories = await CatalogService.categories();
     _trades = await CatalogService.trades();
 
+    // Le catalogue vient du réseau : l'écran peut avoir été quitté entre
+    // temps, et lire le contexte après un `await` sans ce garde-fou est
+    // exactement ce que signale `use_build_context_synchronously`.
+    if (!mounted) return;
+
     final session = context.read<AppSession>();
     final w = session.worker;
     if (w != null) {

@@ -66,7 +66,7 @@ class _MarkPainter extends CustomPainter {
     canvas.scale(scale);
     canvas.translate(-_vbX, -_vbY);
 
-    final box = const Rect.fromLTWH(_vbX, _vbY, _vbW, _vbH);
+    const box = Rect.fromLTWH(_vbX, _vbY, _vbW, _vbH);
 
     final amber = Paint()
       ..shader = const LinearGradient(
