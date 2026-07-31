@@ -1,0 +1,196 @@
+# =====================================================================
+# Build Android signé — APK et AAB
+#
+# Produit les deux formats : l'APK s'installe sur un téléphone pour
+# tester, l'AAB est le seul accepté par la Play Console.
+#
+# Ne se déclenche jamais sur une pull request, et jamais depuis un fork.
+# C'est délibéré : ce workflow manipule la clé de signature, et GitHub
+# expose les secrets à tout workflow qui s'exécute. Une PR venue d'un
+# inconnu ne doit pas pouvoir en déclencher un.
+#
+# SECRETS À CRÉER — Settings > Secrets and variables > Actions
+#
+#   ANDROID_KEYSTORE_BASE64    le fichier .jks encodé en base64
+#   ANDROID_KEYSTORE_PASSWORD  mot de passe du keystore
+#   ANDROID_KEY_PASSWORD       mot de passe de la clé (souvent identique)
+#   ANDROID_KEY_ALIAS          alias de la clé (« upload » chez toi)
+#   ADMOB_APP_ID               facultatif — App ID AdMob réel. Absent, le
+#                              build utilise l'App ID de test de Google.
+#
+# Pour encoder le keystore :
+#   ./encode_keystore.sh
+#
+# RAPPEL : ton dépôt est public. Les secrets ne sont pas lisibles dans
+# les journaux, mais quiconque obtient un accès en écriture peut les
+# exfiltrer en modifiant ce fichier. Traite la liste des collaborateurs
+# avec le même sérieux que la clé elle-même.
+# =====================================================================
+name: Build Android signé
+
+on:
+  workflow_dispatch:
+    inputs:
+      ads_test:
+        description: >-
+          Mode test AdMob. Laisse « true » tant que les unités
+          publicitaires de production ne sont pas créées : publier avec
+          de vraies unités non configurées ne rapporte rien et fausse
+          les statistiques.
+        type: boolean
+        default: true
+  push:
+    tags:
+      - 'v*'
+
+# Un seul build à la fois : deux exécutions concurrentes se disputeraient
+# le cache Gradle et produiraient des artefacts difficiles à distinguer.
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # Le dépôt étant public, cette garde empêche un fork d'exécuter le
+    # workflow — et donc de tenter d'atteindre les secrets.
+    if: github.repository_owner == 'Tabis4004'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # AGP 9 et Gradle 9 exigent au minimum le JDK 17, qui est aussi la
+      # cible déclarée dans android/app/build.gradle.kts.
+      - name: JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Version du projet
+        id: version
+        run: |
+          version=$(sed -n 's/^version: *//p' pubspec.yaml)
+          echo "full=$version"                       >> "$GITHUB_OUTPUT"
+          echo "name=${version%%+*}"                 >> "$GITHUB_OUTPUT"
+          echo "code=${version##*+}"                 >> "$GITHUB_OUTPUT"
+          echo "Version $version"
+
+      # Le keystore n'existe que le temps du build. Le chemin pointe hors
+      # du dépôt pour qu'aucune commande d'archivage ne puisse le happer.
+      - name: Clé de signature
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASS:   ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASS:     ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS:    ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KEYSTORE_B64:-}" ]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 est vide. Sans clé, le" \
+                 "build produirait un AAB refusé par la Play Console."
+            exit 1
+          fi
+
+          keystore="$RUNNER_TEMP/upload-keystore.jks"
+          printf '%s' "$KEYSTORE_B64" | base64 -d > "$keystore"
+
+          # Vérification immédiate : un mot de passe faux se manifeste
+          # sinon après plusieurs minutes de compilation, dans une trace
+          # Gradle illisible.
+          if ! keytool -list -keystore "$keystore" -storepass "$STORE_PASS" >/dev/null 2>&1; then
+            echo "::error::Le keystore refuse ANDROID_KEYSTORE_PASSWORD."
+            exit 1
+          fi
+
+          cat > android/key.properties <<EOF
+          storeFile=$keystore
+          storePassword=$STORE_PASS
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASS
+          EOF
+
+      # Absent, le build retombe sur l'App ID de test : l'application
+      # démarre normalement mais ne sert aucune vraie publicité.
+      - name: App ID AdMob
+        env:
+          ADMOB_APP_ID: ${{ secrets.ADMOB_APP_ID }}
+        run: |
+          set -euo pipefail
+          if [ -n "${ADMOB_APP_ID:-}" ]; then
+            printf 'admobAppId=%s\n' "$ADMOB_APP_ID" > android/admob.properties
+            echo "App ID AdMob de production injecté."
+          else
+            echo "::notice::ADMOB_APP_ID absent — App ID de test de Google utilisé."
+          fi
+
+      - name: Dépendances
+        run: flutter pub get
+
+      # L'analyse d'abord : elle prend quelques secondes et évite
+      # d'attendre un build de plusieurs minutes pour un import oublié.
+      - name: Analyse
+        run: flutter analyze
+
+      - name: Tests
+        run: flutter test
+
+      - name: APK
+        run: flutter build apk --release --dart-define=ADS_TEST=${{ inputs.ads_test || 'true' }}
+
+      - name: AAB
+        run: flutter build appbundle --release --dart-define=ADS_TEST=${{ inputs.ads_test || 'true' }}
+
+      # Contrôle de dernière minute : un manifeste contenant encore un
+      # placeholder d'App ID fait planter l'application au lancement,
+      # depuis un ContentProvider, avant même le premier écran. C'est le
+      # bug qui a coûté trois versions.
+      - name: Vérification du manifeste
+        run: |
+          set -euo pipefail
+          manifest=$(find build/app/intermediates -name AndroidManifest.xml -path '*merged_manifest*' | head -1)
+          if [ -z "$manifest" ]; then
+            echo "::warning::Manifeste fusionné introuvable, contrôle ignoré."
+            exit 0
+          fi
+          id=$(grep -A2 'com.google.android.gms.ads.APPLICATION_ID' "$manifest" \
+               | grep -o 'ca-app-pub-[0-9]\{16\}~[0-9]\{10\}' | head -1 || true)
+          if [ -z "$id" ]; then
+            echo "::error::Aucun App ID AdMob valide dans le manifeste fusionné."
+            exit 1
+          fi
+          echo "App ID embarqué : $id"
+
+      - name: Renommage
+        run: |
+          set -euo pipefail
+          v="${{ steps.version.outputs.name }}-${{ steps.version.outputs.code }}"
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk    "dist/ticonnect-$v.apk"
+          cp build/app/outputs/bundle/release/app-release.aab "dist/ticonnect-$v.aab"
+          ls -lh dist
+
+      - name: Publication des artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ticonnect-${{ steps.version.outputs.name }}-${{ steps.version.outputs.code }}
+          path: dist/*
+          retention-days: 30
+          if-no-files-found: error
+
+      # `always()` : la clé doit disparaître même si le build a échoué.
+      - name: Effacement de la clé
+        if: always()
+        run: |
+          rm -f android/key.properties android/admob.properties
+          rm -f "$RUNNER_TEMP/upload-keystore.jks"

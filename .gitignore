@@ -19,3 +19,6 @@ supabase/seed_dev.sql
 
 # Modèle économique : le dépôt est public, les hypothèses de revenu n'y ont pas leur place.
 modele-economique-ticonnect.xlsx
+
+# Artefacts renommés par le workflow GitHub avant publication.
+/dist/

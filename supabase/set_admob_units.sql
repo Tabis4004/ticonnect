@@ -20,10 +20,18 @@ update public.ad_placements set ad_unit_android = 'ca-app-pub-XXXXXXXXXXXXXXXX/3
  where key = 'job_list_banner';           -- format: banner
 
 update public.ad_placements set ad_unit_android = 'ca-app-pub-XXXXXXXXXXXXXXXX/4444444444'
- where key = 'profile_view_interstitial'; -- format: interstitial
+ where key = 'worker_detail_banner';      -- format: banner
 
 update public.ad_placements set ad_unit_android = 'ca-app-pub-XXXXXXXXXXXXXXXX/5555555555'
+ where key = 'profile_view_interstitial'; -- format: interstitial
+
+update public.ad_placements set ad_unit_android = 'ca-app-pub-XXXXXXXXXXXXXXXX/6666666666'
  where key = 'app_open';                  -- format: app_open, désactivé par défaut
+
+-- Un bloc d'annonces par emplacement, jamais partagé : AdMob ne rend ses
+-- statistiques que par bloc. Deux emplacements sur un même bloc rendent
+-- l'eCPM par écran impossible à lire, et c'est précisément ce que sert à
+-- mesurer ad_revenue_summary().
 
 -- Contrôle : aucun emplacement actif ne doit rester sans identifiant
 select key, format, is_enabled, ad_unit_android
