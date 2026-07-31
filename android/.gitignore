@@ -16,3 +16,5 @@ key.properties
 # App ID AdMob réel : hors du dépôt public tant que la monétisation
 # n'est pas en place (voir admob.properties.example).
 admob.properties
+/.kotlin/
+/.kotlin/
