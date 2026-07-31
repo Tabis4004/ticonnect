@@ -155,12 +155,29 @@ Deno.serve(async (req) => {
   const refuse = () => new Response('Invalid', { status: 400 });
 
   try {
+    // Requête sans signature : sonde de disponibilité, ou bouton « Valider
+    // l'URL » de la console AdMob. On accuse réception sans rien accorder —
+    // une récompense n'est jamais attribuée avant la vérification plus bas,
+    // donc répondre 200 ici n'ouvre aucune brèche. Répondre 400 ferait
+    // échouer la validation de la console et laisserait croire à une
+    // fonction en panne.
+    if (!url.searchParams.get('signature')) return ok();
+
+    // Signature présente mais invalide : c'est la seule réponse d'erreur de
+    // cette fonction. Soit la console AdMob est mal configurée, soit
+    // quelqu'un tente de fabriquer des récompenses.
     if (!(await signatureIsValid(url))) return refuse();
 
     const impressionId = url.searchParams.get('custom_data');
     const transactionId = url.searchParams.get('transaction_id');
     const userId = url.searchParams.get('user_id');
-    if (!impressionId || !transactionId) return refuse();
+
+    // Signature valable mais rien à créditer : callback de test, ou
+    // `custom_data` vide. Réessayer n'y changerait rien, on acquitte.
+    if (!impressionId || !transactionId) {
+      console.info('Callback signée sans impression associée');
+      return ok();
+    }
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -174,11 +191,19 @@ Deno.serve(async (req) => {
       .eq('id', impressionId)
       .maybeSingle();
 
-    if (error || !impression) return refuse();
+    // Impression inconnue : purge, identifiant fabriqué, ou callback de
+    // test. Aucune tentative supplémentaire n'aboutira, on acquitte.
+    if (error || !impression) {
+      console.warn('Impression introuvable', impressionId);
+      return ok();
+    }
 
     // Le user_id transmis à AdMob est l'identifiant du profil : s'il ne
     // correspond pas, la callback ne concerne pas cette impression.
-    if (userId && userId !== impression.profile_id) return refuse();
+    if (userId && userId !== impression.profile_id) {
+      console.warn('user_id ne correspond pas à l\'impression', impressionId);
+      return ok();
+    }
 
     // Rejeu : la contrainte UNIQUE sur ssv_transaction_id le bloquerait de
     // toute façon, mais autant sortir avant d'écrire.
