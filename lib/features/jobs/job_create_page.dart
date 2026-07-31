@@ -3,12 +3,26 @@ import 'package:flutter/material.dart';
 import '../../core/config.dart';
 import '../../core/supabase.dart';
 import '../../models/models.dart';
+import '../../services/ads_service.dart';
 import '../../services/catalog_service.dart';
 import '../../services/jobs_service.dart';
+import '../../services/settings_service.dart';
 import '../../widgets/common.dart';
 
 /// Publication d'une demande. Entièrement gratuit pour le client :
 /// c'est lui qui alimente la marketplace en travail.
+///
+/// La publicité côté client est un point d'équilibre délicat. Le côté rare
+/// d'une marketplace de services n'est pas l'ouvrier — ils sont nombreux et
+/// tolèrent beaucoup, puisqu'ils cherchent un revenu — mais le client qui a
+/// un vrai chantier. Lui imposer une vidéo avant même qu'il puisse décrire
+/// son problème ajoute de la friction à l'instant précis où son intention
+/// est maximale et son engagement envers l'application encore nul.
+///
+/// Les deux placements existent donc, et `app_settings.client_job_ad_placement`
+/// arbitre : « after » par défaut, « before » si les chiffres d'abandon
+/// donnent tort à ce raisonnement. La bascule se fait depuis le tableau de
+/// bord admin, sans republier.
 class JobCreatePage extends StatefulWidget {
   const JobCreatePage({super.key});
   @override
@@ -41,6 +55,21 @@ class _JobCreatePageState extends State<JobCreatePage> {
         _trades = t;
       });
     });
+    _maybeShowEntryAd();
+  }
+
+  /// Interstitiel « avant la saisie », si l'administrateur l'a activé.
+  ///
+  /// Affiché après le premier rendu plutôt que dans `initState` : un plein
+  /// écran lancé pendant une transition de navigation est exactement ce
+  /// qu'AdMob proscrit, et ce qui provoque les clics accidentels.
+  Future<void> _maybeShowEntryAd() async {
+    final mode = SettingsService.string(
+        SettingKeys.clientJobAdPlacement, 'after');
+    if (mode != 'before') return;
+    await Future.delayed(const Duration(milliseconds: 400));
+    if (!mounted) return;
+    await AdsService.maybeShowInterstitial(AdKeys.jobPostBefore);
   }
 
   @override
@@ -85,6 +114,17 @@ class _JobCreatePageState extends State<JobCreatePage> {
       );
       if (!mounted) return;
       showOk(context, 'Demande publiée. Les ouvriers vont la voir.');
+
+      // Interstitiel « après validation » : l'engagement est acquis, la
+      // demande est enregistrée. Si la publicité ne charge pas ou que le
+      // plafond est atteint, on sort simplement de l'écran.
+      final mode = SettingsService.string(
+          SettingKeys.clientJobAdPlacement, 'after');
+      if (mode == 'after') {
+        await AdsService.maybeShowInterstitial(AdKeys.jobPostAfter);
+      }
+
+      if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
       if (mounted) showError(context, humanError(e));

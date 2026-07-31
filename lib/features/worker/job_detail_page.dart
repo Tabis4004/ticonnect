@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
 import '../../core/supabase.dart';
 import '../../models/models.dart';
+import '../../services/ads_service.dart';
 import '../../services/jobs_service.dart';
+import '../../services/settings_service.dart';
+import '../../widgets/ad_intro.dart';
 import '../../widgets/common.dart';
 import '../../widgets/locked_contact.dart';
 
@@ -78,6 +81,30 @@ class _JobDetailPageState extends State<JobDetailPage> {
     );
 
     if (send == true) {
+      // La publicité se joue ici, entre la validation du formulaire et
+      // l'envoi : c'est le moment où l'ouvrier reçoit la valeur, et où le
+      // volume d'impressions suit l'activité réelle de la marketplace
+      // plutôt que le seul nombre d'inscrits.
+      //
+      // Elle ne bloque jamais la candidature : inventaire vide, refus de
+      // l'utilisateur ou plafond atteint, l'envoi se fait quand même.
+      // Faire dépendre le gagne-pain d'un ouvrier de la disponibilité
+      // d'une vidéo serait à la fois cruel et mauvais pour la liquidité.
+      if (mounted && SettingsService.boolean(SettingKeys.workerApplyAdEnabled, true)) {
+        final accepted =
+            await AdIntro.ask(context, AdKeys.applyRewardedInterstitial);
+        if (accepted) {
+          await AdsService.showRewardedInterstitial(
+              AdKeys.applyRewardedInterstitial);
+        }
+      }
+
+      if (!mounted) {
+        message.dispose();
+        price.dispose();
+        return;
+      }
+
       setState(() => _busy = true);
       try {
         await ApplicationsService.apply(

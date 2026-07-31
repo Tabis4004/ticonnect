@@ -22,6 +22,10 @@ class Profile {
   final String? neighborhood;
   final bool isSuspended;
 
+  /// Code de parrainage, généré à la création du profil. Six caractères,
+  /// sans 0/O ni 1/I/L : il se dicte au téléphone et se recopie à la main.
+  final String? referralCode;
+
   Profile({
     required this.id,
     required this.fullName,
@@ -33,6 +37,7 @@ class Profile {
     this.city,
     this.neighborhood,
     this.isSuspended = false,
+    this.referralCode,
   });
 
   bool get isWorker => role == 'worker' || role == 'both';
@@ -49,6 +54,7 @@ class Profile {
         city: m['city'] as String?,
         neighborhood: m['neighborhood'] as String?,
         isSuspended: m['is_suspended'] as bool? ?? false,
+        referralCode: m['referral_code'] as String?,
       );
 }
 
@@ -559,6 +565,15 @@ class AdPlacement {
   final int? dailyCapPerUser;
   final int minSecondsBetween;
 
+  /// Écran d'introduction des formats récompensés. Pour
+  /// `rewarded_interstitial`, l'annonce de la récompense et la porte de
+  /// sortie ne sont pas décoratives : c'est ce qui rend l'affichage
+  /// automatique conforme aux règles AdMob.
+  final String? introTitle;
+  final String? introBody;
+  final String? introCta;
+  final String? skipLabel;
+
   AdPlacement({
     required this.key,
     required this.format,
@@ -568,6 +583,10 @@ class AdPlacement {
     this.adUnitAndroid,
     this.adUnitIos,
     this.dailyCapPerUser,
+    this.introTitle,
+    this.introBody,
+    this.introCta,
+    this.skipLabel,
   });
 
   factory AdPlacement.fromMap(Map<String, dynamic> m) => AdPlacement(
@@ -579,6 +598,10 @@ class AdPlacement {
         rewardCredits: _i(m['reward_credits']),
         dailyCapPerUser: (m['daily_cap_per_user'] as num?)?.toInt(),
         minSecondsBetween: _i(m['min_seconds_between'], 60),
+        introTitle: m['intro_title'] as String?,
+        introBody: m['intro_body'] as String?,
+        introCta: m['intro_cta'] as String?,
+        skipLabel: m['skip_label'] as String?,
       );
 }
 

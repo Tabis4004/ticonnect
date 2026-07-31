@@ -16,6 +16,16 @@ class AppSession extends ChangeNotifier {
   bool isAdmin = false;
   bool loading = true;
 
+  /// `free`, `pro` ou `premium`. Calculé en base par `my_plan()`, où la
+  /// date d'expiration fait foi : un statut resté à « active » après
+  /// l'échéance ne donne aucun droit.
+  String plan = 'free';
+
+  /// Le numéro conditionne les actes engageants — publier un besoin, se
+  /// déclarer ouvrier. Connu à l'avance, l'application peut le demander au
+  /// bon moment plutôt qu'échouer après un formulaire rempli.
+  bool hasPhone = false;
+
   AppSession() {
     db.auth.onAuthStateChange.listen((_) => refresh());
     refresh();
@@ -25,6 +35,8 @@ class AppSession extends ChangeNotifier {
   bool get needsProfile => isSignedIn && profile == null;
   bool get isWorker => profile?.isWorker ?? false;
   int get credits => wallet?.balance ?? 0;
+  bool get isPro => plan == 'pro' || plan == 'premium';
+  bool get isPremium => plan == 'premium';
 
   Future<void> refresh() async {
     final id = uid;
@@ -33,6 +45,8 @@ class AppSession extends ChangeNotifier {
       worker = null;
       wallet = null;
       isAdmin = false;
+      plan = 'free';
+      hasPhone = false;
       loading = false;
       notifyListeners();
       return;
@@ -56,6 +70,19 @@ class AppSession extends ChangeNotifier {
           : Wallet.fromMap(rows[2] as Map<String, dynamic>);
 
       isAdmin = await AuthService.isAdmin();
+
+      // Deux appels tolérants à l'échec : hors ligne, mieux vaut un plan
+      // « free » temporaire qu'un écran de compte vide.
+      try {
+        plan = (await db.rpc('my_plan') as String?) ?? 'free';
+      } catch (_) {
+        plan = 'free';
+      }
+      try {
+        hasPhone = (await db.rpc('has_phone') as bool?) ?? false;
+      } catch (_) {
+        hasPhone = false;
+      }
 
       // La langue de l'interface suit le profil, lui-même initialisé depuis
       // le pays choisi à l'inscription.

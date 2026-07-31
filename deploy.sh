@@ -15,7 +15,7 @@ if [ -n "$(git status --porcelain -- lib pubspec.yaml)" ]; then
 fi
 
 echo "==> Génération de la plateforme web"
-flutter create . --platforms=web --project-name ticonnect --org ci.ticonnect
+flutter create . --platforms=web --project-name ticonnect --org com.ticonnect
 
 echo "==> Dépendances"
 flutter pub get

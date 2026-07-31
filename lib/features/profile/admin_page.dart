@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
 import '../../core/supabase.dart';
 import '../../core/theme.dart';
+import '../../services/ads_service.dart';
+import '../../services/settings_service.dart';
 import '../../widgets/common.dart';
 
 /// Tableau de bord administrateur.
@@ -21,7 +23,16 @@ class _AdminPageState extends State<AdminPage> {
   Map<String, int> _stats = {};
   List<Map<String, dynamic>> _reports = [];
   List<Map<String, dynamic>> _leaks = [];
+  List<Map<String, dynamic>> _adRevenue = [];
+  Map<String, dynamic>? _ssvHealth;
   bool _loading = true;
+  bool _savingSetting = false;
+
+  /// Part des conversations dont le premier échange contient déjà un
+  /// numéro. C'est l'indicateur qui décide de tout : au-delà d'un certain
+  /// seuil, une commission ne sera jamais collectable, et l'abonnement
+  /// reste le seul modèle tenable.
+  double? _leakRate;
 
   @override
   void initState() {
@@ -38,6 +49,34 @@ class _AdminPageState extends State<AdminPage> {
     }
   }
 
+  Future<int> _countWhere(String table, String column, Object value) async {
+    try {
+      final rows = await db.from(table).select('*').eq(column, value).count();
+      return rows.count;
+    } catch (_) {
+      return -1;
+    }
+  }
+
+  Future<void> _setPlacement(String mode) async {
+    setState(() => _savingSetting = true);
+    try {
+      await SettingsService.set(SettingKeys.clientJobAdPlacement, mode);
+      // Les emplacements portent aussi un drapeau d'activation : on aligne
+      // les deux, sinon un réglage dirait « avant » pendant que la table
+      // garderait l'emplacement désactivé.
+      await db.from('ad_placements').update({'is_enabled': mode == 'before'})
+          .eq('key', AdKeys.jobPostBefore);
+      await db.from('ad_placements').update({'is_enabled': mode == 'after'})
+          .eq('key', AdKeys.jobPostAfter);
+      await AdsService.loadPlacements();
+      if (mounted) showOk(context, 'Placement mis à jour.');
+    } catch (e) {
+      if (mounted) showError(context, humanError(e));
+    }
+    if (mounted) setState(() => _savingSetting = false);
+  }
+
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
@@ -49,7 +88,31 @@ class _AdminPageState extends State<AdminPage> {
         'Mises en relation': await _count('contact_unlocks'),
         'Avis': await _count('reviews'),
         'Impressions pub': await _count('ad_impressions'),
+        'Abonnements actifs': await _countWhere('subscriptions', 'status', 'active'),
       };
+
+      final messages = await _count('messages');
+      final leaking = await _countWhere('messages', 'contains_contact', true);
+      _leakRate = messages > 0 ? leaking / messages : null;
+
+      await SettingsService.load();
+
+      // Deux appels tolérants à l'échec : tant que les migrations `ad_rewards` et `ad_revenue_reporting`
+      // ne sont pas appliquées, ces fonctions n'existent pas et le reste
+      // du tableau de bord doit continuer à s'afficher.
+      try {
+        _adRevenue = List<Map<String, dynamic>>.from(
+            await db.rpc('ad_revenue_summary', params: {'p_days': 14}));
+      } catch (_) {
+        _adRevenue = [];
+      }
+      try {
+        final rows = List<Map<String, dynamic>>.from(
+            await db.rpc('ad_ssv_health'));
+        _ssvHealth = rows.isEmpty ? null : rows.first;
+      } catch (_) {
+        _ssvHealth = null;
+      }
 
       _reports = List<Map<String, dynamic>>.from(await db
           .from('reports')
@@ -117,6 +180,10 @@ class _AdminPageState extends State<AdminPage> {
                   ],
                 ),
                 const SizedBox(height: 24),
+                _adRevenueCard(),
+                const SizedBox(height: 24),
+                _adPlacementCard(),
+                const SizedBox(height: 24),
                 const Text('Signalements ouverts',
                     style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
@@ -142,9 +209,36 @@ class _AdminPageState extends State<AdminPage> {
                 const Text(
                   'Messages contenant un numéro de téléphone. Un taux élevé '
                   'signifie que les échanges quittent l\'application dès le '
-                  'premier contact.',
+                  'premier contact — et qu\'une commission ne serait jamais '
+                  'collectable ici.',
                   style: TextStyle(fontSize: 12, color: Colors.black54),
                 ),
+                if (_leakRate != null) ...[
+                  const SizedBox(height: 8),
+                  Row(children: [
+                    Text(
+                      '${(_leakRate! * 100).toStringAsFixed(1)} %',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: _leakRate! > 0.6
+                            ? AppTheme.danger
+                            : AppTheme.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _leakRate! > 0.6
+                            ? 'Au-dessus de 60 % : rester sur l\'abonnement, '
+                                'la commission serait déclarative.'
+                            : 'Sous 60 % : une commission sur prestation '
+                                'encaissée resterait envisageable plus tard.',
+                        style: const TextStyle(fontSize: 11, color: Colors.black54),
+                      ),
+                    ),
+                  ]),
+                ],
                 const SizedBox(height: 8),
                 if (_leaks.isEmpty)
                   const Text('Aucun message détecté.',
@@ -164,6 +258,166 @@ class _AdminPageState extends State<AdminPage> {
                 const SizedBox(height: 24),
               ]),
             ),
+    );
+  }
+
+  /// Bascule du placement publicitaire côté client.
+  ///
+  /// Le débat « avant ou après la saisie du besoin » ne se tranche pas en
+  /// réunion : il se tranche sur le taux d'abandon du formulaire. D'où ce
+  /// bouton, plutôt qu'une valeur figée dans le code.
+  /// Revenu publicitaire et santé de la vérification serveur.
+  ///
+  /// Toutes les projections du modèle reposent sur un eCPM estimé, faute
+  /// de donnée publique pour la région. Ce tableau le remplace par le
+  /// chiffre réel — le seul qui dise si le modèle tient.
+  ///
+  /// Le taux de vérification est l'autre indicateur critique : s'il
+  /// s'effondre, les ouvriers regardent des vidéos sans jamais obtenir
+  /// leur mise en avant. On encaisse la gêne sans livrer la contrepartie,
+  /// et c'est invisible depuis la console AdMob.
+  Widget _adRevenueCard() {
+    final ratio = (_ssvHealth?['verified_ratio'] as num?)?.toDouble();
+    final rewarded = (_ssvHealth?['rewarded_impressions'] as num?)?.toInt() ?? 0;
+    final alert = rewarded > 0 && (ratio ?? 0) < 0.5;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+            color: alert ? Colors.red.shade200 : const Color(0xFFE6EAE7)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Revenu publicitaire — 14 jours',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        if (rewarded == 0)
+          const Text('Aucune vidéo récompensée sur les dernières 24 h.',
+              style: TextStyle(fontSize: 12, color: Colors.black54))
+        else
+          Row(children: [
+            Icon(alert ? Icons.error_outline : Icons.verified_outlined,
+                size: 18, color: alert ? Colors.red : AppTheme.primary),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                'Vérification serveur : '
+                '${((ratio ?? 0) * 100).toStringAsFixed(0)} % '
+                'sur $rewarded visionnage(s) en 24 h'
+                '${alert ? " — vérifie que l'Edge Function admob-ssv est déployée" : ""}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: alert ? Colors.red : Colors.black54,
+                  fontWeight: alert ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ),
+          ]),
+        const SizedBox(height: 12),
+        if (_adRevenue.isEmpty)
+          const Text('Aucune impression enregistrée sur la période.',
+              style: TextStyle(fontSize: 12, color: Colors.black54))
+        else
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              columnSpacing: 18,
+              headingRowHeight: 34,
+              dataRowMinHeight: 30,
+              dataRowMaxHeight: 38,
+              columns: const [
+                DataColumn(label: Text('Jour', style: TextStyle(fontSize: 12))),
+                DataColumn(
+                    label: Text('Emplacement', style: TextStyle(fontSize: 12))),
+                DataColumn(
+                    label: Text('Impr.', style: TextStyle(fontSize: 12)),
+                    numeric: true),
+                DataColumn(
+                    label: Text('Vérif.', style: TextStyle(fontSize: 12)),
+                    numeric: true),
+                DataColumn(
+                    label: Text('Revenu', style: TextStyle(fontSize: 12)),
+                    numeric: true),
+              ],
+              rows: [
+                for (final r in _adRevenue.take(40))
+                  DataRow(cells: [
+                    DataCell(Text('${r['day']}'.substring(5),
+                        style: const TextStyle(fontSize: 12))),
+                    DataCell(Text('${r['placement_key']}',
+                        style: const TextStyle(fontSize: 12))),
+                    DataCell(Text('${r['impressions']}',
+                        style: const TextStyle(fontSize: 12))),
+                    DataCell(Text('${r['verified']}',
+                        style: const TextStyle(fontSize: 12))),
+                    DataCell(Text(
+                        '${(r['estimated_revenue'] as num? ?? 0).toStringAsFixed(4)} \$',
+                        style: const TextStyle(fontSize: 12))),
+                  ]),
+              ],
+            ),
+          ),
+        const SizedBox(height: 8),
+        const Text(
+          'La colonne Revenu n\'est alimentée que si l\'API de reporting '
+          'AdMob est branchée. Sans elle, croise le nombre d\'impressions '
+          'avec le revenu de la console AdMob pour obtenir ton eCPM réel '
+          'par emplacement.',
+          style: TextStyle(fontSize: 11, color: Colors.black45),
+        ),
+      ]),
+    );
+  }
+
+  Widget _adPlacementCard() {
+    final mode = SettingsService.string(
+        SettingKeys.clientJobAdPlacement, 'after');
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE6EAE7)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Publicité côté client',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        const Text(
+          'Où afficher l\'interstitiel lors de la publication d\'un besoin. '
+          '« Après » est recommandé : la friction tombe une fois l\'engagement '
+          'acquis. « Avant » garantit l\'affichage mais expose à l\'abandon du '
+          'formulaire. Surveille le nombre de missions publiées après chaque '
+          'bascule.',
+          style: TextStyle(fontSize: 12, color: Colors.black54),
+        ),
+        const SizedBox(height: 12),
+        if (_savingSetting)
+          const Loading()
+        else
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'before', label: Text('Avant')),
+              ButtonSegment(value: 'after', label: Text('Après')),
+              ButtonSegment(value: 'off', label: Text('Aucune')),
+            ],
+            selected: {mode},
+            onSelectionChanged: (s) => _setPlacement(s.first),
+          ),
+        const SizedBox(height: 10),
+        Text(
+          'Publicité à la candidature (ouvrier) : '
+          '${SettingsService.boolean(SettingKeys.workerApplyAdEnabled, true) ? "activée" : "désactivée"} · '
+          'Un résultat sponsorisé sur '
+          '${SettingsService.integer(SettingKeys.sponsoredSlotRatio, 4)} · '
+          'Note plancher '
+          '${SettingsService.decimal(SettingKeys.sponsoredMinRating, 3.5)}',
+          style: const TextStyle(fontSize: 11, color: Colors.black45),
+        ),
+      ]),
     );
   }
 }

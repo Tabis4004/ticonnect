@@ -21,7 +21,18 @@ class WebAdsBackend implements AdsBackend {
   Future<void> showInterstitial(String adUnitId) async {}
 
   @override
+  Future<void> showAppOpen(String adUnitId) async {}
+
+  @override
   Future<bool> showRewarded({
+    required String adUnitId,
+    required String userId,
+    required String customData,
+  }) async =>
+      false;
+
+  @override
+  Future<bool> showRewardedInterstitial({
     required String adUnitId,
     required String userId,
     required String customData,

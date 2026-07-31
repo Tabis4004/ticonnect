@@ -8,15 +8,23 @@ import '../core/config.dart';
 import '../core/supabase.dart';
 import '../models/models.dart';
 import 'ads/ads_backend.dart';
+import 'settings_service.dart';
 
 /// Service publicitaire.
 ///
 /// Trois principes tenus par ce fichier :
 ///
-/// 1. **Conformité AdMob.** Les formats « rewarded » ne sont jamais lancés
-///    sans un geste explicite de l'utilisateur, à chaque fois. Forcer le
-///    visionnage déclenche la violation « Disallowed Rewarded Implementation »
-///    et peut faire suspendre le compte AdMob.
+/// 1. **Conformité AdMob.** Le format `rewarded` n'est jamais lancé sans un
+///    geste explicite de l'utilisateur, à chaque fois. Forcer son visionnage
+///    déclenche la violation « Disallowed Rewarded Implementation » et peut
+///    faire suspendre le compte.
+///
+///    Pour un affichage quasi systématique, deux voies légales existent et
+///    sont les seules employées ici :
+///      · `interstitial` — imposable, sans skip, entre deux écrans ;
+///      · `rewarded_interstitial` — automatique et sans opt-in, à condition
+///        d'un écran d'introduction annonçant la récompense et proposant de
+///        passer (voir `AdIntro` dans widgets/ad_intro.dart).
 ///
 /// 2. **Configuration côté base.** La fréquence, les plafonds et les
 ///    identifiants d'unités viennent de la table `ad_placements`. On ajuste
@@ -53,15 +61,31 @@ class AdsService {
       'android': 'ca-app-pub-3940256099942544/5224354917',
       'ios': 'ca-app-pub-3940256099942544/1712485313',
     },
+    'app_open': {
+      'android': 'ca-app-pub-3940256099942544/9257395921',
+      'ios': 'ca-app-pub-3940256099942544/5575463023',
+    },
+    'rewarded_interstitial': {
+      'android': 'ca-app-pub-3940256099942544/5354046379',
+      'ios': 'ca-app-pub-3940256099942544/6978759866',
+    },
   };
 
   static bool get supported => _backend.supported;
+
+  /// Dernier plein écran affiché, tous emplacements confondus.
+  ///
+  /// Les plafonds par emplacement ne suffisent pas : trois emplacements
+  /// distincts peuvent s'enchaîner en dix secondes et donner à
+  /// l'utilisateur le sentiment d'une publicité à chaque geste — ce
+  /// qu'AdMob sanctionne autant que les utilisateurs.
+  static DateTime? _lastFullScreen;
 
   static Future<void> init() async {
     if (_initialized) return;
     _initialized = true;
     await _backend.initialize();
-    await loadPlacements();
+    await Future.wait([loadPlacements(), SettingsService.load()]);
   }
 
   /// Recharge la configuration depuis la base.
@@ -93,8 +117,16 @@ class AdsService {
     return _isIos ? p.adUnitIos : p.adUnitAndroid;
   }
 
+  static bool _isFullScreen(String format) =>
+      format == 'interstitial' ||
+      format == 'rewarded' ||
+      format == 'rewarded_interstitial' ||
+      format == 'app_open';
+
   /// Un emplacement est jouable si : activé, délai minimum écoulé depuis la
-  /// dernière fois, et plafond journalier non atteint.
+  /// dernière fois, plafond journalier non atteint, et — pour les formats
+  /// plein écran — délai global respecté depuis n'importe quelle autre
+  /// publicité plein écran.
   static Future<bool> canShow(String key) async {
     if (!_backend.supported) return false;
     final p = _placements[key];
@@ -105,6 +137,14 @@ class AdsService {
     if (last != null &&
         DateTime.now().difference(last).inSeconds < p.minSecondsBetween) {
       return false;
+    }
+
+    if (_isFullScreen(p.format) && _lastFullScreen != null) {
+      final floor = SettingsService.integer(
+          SettingKeys.adMinSecondsBetweenAny, 45);
+      if (DateTime.now().difference(_lastFullScreen!).inSeconds < floor) {
+        return false;
+      }
     }
 
     if (p.dailyCapPerUser != null && uid != null) {
@@ -139,8 +179,97 @@ class AdsService {
     final p = _placements[key]!;
     final unit = _unitFor(p)!;
     _lastShown[key] = DateTime.now();
+    _lastFullScreen = DateTime.now();
     unawaited(_log(key, p.format));
     await _backend.showInterstitial(unit);
+  }
+
+  // ------------------------------------------------------ Retour dans l'app
+  /// Publicité de retour, à n'appeler que depuis le cycle de vie.
+  ///
+  /// C'est le seul format qui monétise correctement un utilisateur qui
+  /// ouvre l'application rarement — le profil exact du demandeur, qui
+  /// vient quand il a un besoin et repart.
+  ///
+  /// [firstLaunch] doit valoir `true` au tout premier passage au premier
+  /// plan de la session : AdMob interdit d'afficher ce format au
+  /// démarrage, et le sanctionne. Le plafond journalier et le délai
+  /// minimum de `ad_placements` s'appliquent en plus, comme partout.
+  static Future<void> maybeShowAppOpen({bool firstLaunch = false}) async {
+    if (firstLaunch) return;
+    if (!await canShow(AdKeys.appOpen)) return;
+    final p = _placements[AdKeys.appOpen]!;
+    final unit = _unitFor(p)!;
+    _lastShown[AdKeys.appOpen] = DateTime.now();
+    _lastFullScreen = DateTime.now();
+    unawaited(_log(AdKeys.appOpen, p.format));
+    await _backend.showAppOpen(unit);
+  }
+
+  // --------------------------------------------- Interstitiel récompensé
+  /// Affiche un interstitiel récompensé et rend l'identifiant d'impression
+  /// une fois la récompense validée côté serveur, ou `null`.
+  ///
+  /// L'appelant DOIT avoir présenté l'écran d'introduction au préalable
+  /// (`AdIntro.ask`) : c'est cet écran, avec son bouton pour passer, qui
+  /// rend le format automatique conforme. Le lancer directement remettrait
+  /// le compte AdMob en infraction.
+  ///
+  /// Rend `null` sans bruit quand l'inventaire est vide — un ouvrier ne
+  /// doit jamais être empêché de candidater parce qu'aucune publicité
+  /// n'était disponible.
+  static Future<String?> showRewardedInterstitial(String key) async {
+    if (!await canShow(key)) return null;
+    final p = _placements[key]!;
+    final unit = _unitFor(p)!;
+    final me = uid;
+    if (me == null) return null;
+
+    final impressionId = await _openImpression(key, p.format);
+    if (impressionId == null) return null;
+
+    _lastShown[key] = DateTime.now();
+    _lastFullScreen = DateTime.now();
+
+    final earned = await _backend.showRewardedInterstitial(
+      adUnitId: unit,
+      userId: me,
+      customData: impressionId,
+    );
+    if (!earned) return null;
+
+    // Pas de récompense en crédits sur cet emplacement : inutile
+    // d'immobiliser l'utilisateur douze secondes en attendant la callback.
+    if (p.rewardCredits == 0) return impressionId;
+
+    final verified = await _waitForVerification(impressionId);
+    return verified ? impressionId : null;
+  }
+
+  /// Ouvre une ligne d'impression avant l'affichage.
+  ///
+  /// La RLS impose `ssv_verified = false` et `reward_credits = 0` : c'est la
+  /// callback serveur d'AdMob qui validera, jamais le téléphone.
+  static Future<String?> _openImpression(String key, String format) async {
+    final me = uid;
+    if (me == null) return null;
+    try {
+      final row = await db
+          .from('ad_impressions')
+          .insert({
+            'profile_id': me,
+            'placement_key': key,
+            'format': format,
+            'ssv_verified': false,
+            'reward_credits': 0,
+            'country_code': AppConfig.defaultCountry,
+          })
+          .select('id')
+          .single();
+      return row['id'] as String;
+    } catch (_) {
+      return null;
+    }
   }
 
   // ----------------------------------------------------- Pub récompensée
@@ -158,24 +287,12 @@ class AdsService {
     final me = uid;
     if (me == null) return null;
 
-    // 1. On journalise l'impression AVANT l'affichage. La RLS impose
-    //    ssv_verified = false et reward_credits = 0 : c'est la callback
-    //    serveur d'AdMob qui validera, jamais le téléphone.
-    final row = await db
-        .from('ad_impressions')
-        .insert({
-          'profile_id': me,
-          'placement_key': key,
-          'format': p.format,
-          'ssv_verified': false,
-          'reward_credits': 0,
-          'country_code': AppConfig.defaultCountry,
-        })
-        .select('id')
-        .single();
-    final impressionId = row['id'] as String;
+    // 1. On journalise l'impression AVANT l'affichage.
+    final impressionId = await _openImpression(key, p.format);
+    if (impressionId == null) return null;
 
     _lastShown[key] = DateTime.now();
+    _lastFullScreen = DateTime.now();
     final earned = await _backend.showRewarded(
       adUnitId: unit,
       userId: me,
@@ -231,9 +348,29 @@ class AdsService {
 
 /// Clés des emplacements, alignées sur la table `ad_placements`.
 class AdKeys {
+  // Opt-in explicite : conformes tels quels, déclenchés par un bouton.
   static const unlockRewarded = 'unlock_contact_rewarded';
   static const boostRewarded = 'boost_profile_rewarded';
+
   static const jobListBanner = 'job_list_banner';
+
+  /// Client, bas de la fiche d'un ouvrier. Le seul écran où un demandeur
+  /// s'attarde vraiment.
+  static const workerDetailBanner = 'worker_detail_banner';
   static const profileInterstitial = 'profile_view_interstitial';
   static const appOpen = 'app_open';
+
+  /// Ouvrier, avant l'envoi d'une candidature. Le format récompensé
+  /// automatique — précédé de son écran d'introduction.
+  static const applyRewardedInterstitial = 'apply_rewarded_interstitial';
+
+  /// Client, avant la saisie du besoin. Désactivé par défaut.
+  static const jobPostBefore = 'job_post_before_interstitial';
+
+  /// Client, après validation du besoin. Actif par défaut.
+  static const jobPostAfter = 'job_post_after_interstitial';
+
+  /// Variante automatique du déverrouillage, pour le jour où
+  /// `unlock_cost` repassera au-dessus de zéro.
+  static const unlockRewardedInterstitial = 'unlock_rewarded_interstitial';
 }

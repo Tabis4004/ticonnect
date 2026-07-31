@@ -224,6 +224,12 @@ class _WorkerDetailPageState extends State<WorkerDetailPage> {
               ),
             ),
         ],
+        // Le client passe l'essentiel de son temps ici, à comparer des
+        // profils — c'est le seul écran de son parcours où une bannière a
+        // un volume réel. En bas de page : elle ne recouvre aucune action
+        // et ne participe pas à la décision de contacter.
+        const SizedBox(height: 8),
+        const AdBannerSlot(placementKey: AdKeys.workerDetailBanner),
       ]),
     );
   }

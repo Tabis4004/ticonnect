@@ -10,6 +10,7 @@ import '../../core/theme.dart';
 import '../../services/auth_service.dart';
 import '../../services/location_service.dart';
 import '../../services/session.dart';
+import '../../widgets/brand_mark.dart';
 import '../../widgets/common.dart';
 import '../../widgets/country_picker.dart';
 import '../../widgets/language_button.dart';
@@ -71,7 +72,7 @@ class _SignInPageState extends State<SignInPage> {
       body: SafeArea(
         child: ListView(padding: const EdgeInsets.all(24), children: [
           const SizedBox(height: 8),
-          const Icon(Icons.handyman_rounded, size: 56, color: AppTheme.primary),
+          const BrandMark(size: 72, gap: AppTheme.surface),
           const SizedBox(height: 20),
           const Text('Ticonnect',
               style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),

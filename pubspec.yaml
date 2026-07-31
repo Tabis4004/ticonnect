@@ -22,6 +22,10 @@ dependencies:
   geolocator: ^14.0.3
   flutter_map: ^8.3.1
   latlong2: ^0.10.1
+  # Déjà présent en dépendance transitive (résolu en 10.2.1) ; déclaré ici
+  # parce que `devices_service.dart` l'importe directement, et qu'un import
+  # non déclaré est une erreur d'analyse.
+  package_info_plus: ^10.2.1
 
 dev_dependencies:
   flutter_lints: ^4.0.0

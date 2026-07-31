@@ -1,17 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/formatters.dart';
 import '../../core/l10n.dart';
 import '../../core/supabase.dart';
 import '../../core/theme.dart';
 import '../../models/models.dart';
+import '../../services/ads_service.dart';
 import '../../services/catalog_service.dart';
 import '../../services/session.dart';
 import '../../services/workers_service.dart';
+import '../../widgets/ad_intro.dart';
 import '../../widgets/common.dart';
 import '../worker/wallet_page.dart';
 import 'admin_page.dart';
 import 'contact_page.dart';
+import 'referral_page.dart';
+import 'subscription_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -21,6 +26,47 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   bool _switching = false;
+  bool _boosting = false;
+
+  /// Mise en avant contre visionnage.
+  ///
+  /// L'écran d'introduction n'est pas décoratif : il annonce la
+  /// récompense et laisse une porte de sortie, ce qu'AdMob exige des
+  /// formats récompensés. Le retirer met le compte en infraction.
+  Future<void> _boost() async {
+    if (_boosting) return;
+
+    if (!await AdsService.canShow(AdKeys.boostRewarded)) {
+      if (mounted) {
+        showError(context,
+            'Aucune vidéo disponible pour le moment. Réessaie plus tard.');
+      }
+      return;
+    }
+    if (!mounted) return;
+
+    final accepted = await AdIntro.ask(context, AdKeys.boostRewarded);
+    if (!accepted || !mounted) return;
+
+    setState(() => _boosting = true);
+    final res = await WorkersService.boostByWatchingAd();
+    if (!mounted) return;
+    setState(() => _boosting = false);
+
+    if (res.ok) {
+      await context.read<AppSession>().refresh();
+      if (!mounted) return;
+      final until = res.boostedUntil;
+      showOk(
+        context,
+        until == null
+            ? 'Ton profil remonte dans les résultats'
+            : 'En tête jusqu\'à ${Fmt.time(until)}',
+      );
+    } else {
+      showError(context, res.message ?? 'Réessaie plus tard.');
+    }
+  }
 
   /// Disponibilité : c'est ce drapeau qui décide si l'ouvrier remonte dans
   /// l'annuaire et s'il reçoit les alertes de nouvelles missions.
@@ -41,6 +87,7 @@ class _ProfilePageState extends State<ProfilePage> {
     final p = session.profile;
     if (p == null) return const Scaffold(body: Loading());
     final available = session.worker?.availability == 'available';
+    final boosted = session.worker?.isBoosted ?? false;
 
     return Scaffold(
       appBar: AppBar(title: Text('Mon compte'.tr)),
@@ -122,6 +169,34 @@ class _ProfilePageState extends State<ProfilePage> {
             onChanged: _switching ? null : _toggleAvailability,
           ),
           const Divider(height: 1),
+          // Le geste qui finance l'application. Volontairement placé juste
+          // sous la disponibilité : ce sont les deux leviers quotidiens de
+          // l'ouvrier sur sa propre visibilité.
+          ListTile(
+            leading: _boosting
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(
+                    boosted ? Icons.rocket_launch : Icons.rocket_launch_outlined,
+                    color: boosted ? AppTheme.accent : null,
+                  ),
+            title: Text(boosted ? 'Tu es en tête'.tr : 'Passer en tête'.tr),
+            subtitle: Text(
+              boosted
+                  ? 'Jusqu\'à ${Fmt.time(session.worker!.boostedUntil!)} — '
+                      'regarde une autre vidéo pour prolonger'
+                  : 'Regarde une courte vidéo, ton profil remonte dans les '
+                      'résultats de recherche',
+              style: const TextStyle(fontSize: 12),
+            ),
+            trailing: const Icon(Icons.play_circle_outline,
+                color: Colors.black38),
+            onTap: _boosting ? null : _boost,
+          ),
+          const Divider(height: 1),
           ListTile(
             leading: const Icon(Icons.toll_outlined),
             title: Text('Mes crédits'.tr),
@@ -142,7 +217,55 @@ class _ProfilePageState extends State<ProfilePage> {
               MaterialPageRoute(builder: (_) => const WorkerSetupPage()),
             ),
           ),
-        ] else
+          const Divider(height: 1),
+          ListTile(
+            leading: Icon(
+              session.isPremium
+                  ? Icons.workspace_premium
+                  : Icons.trending_up_outlined,
+              color: session.isPro ? AppTheme.accent : null,
+            ),
+            title: Text(session.isPro ? 'Mon abonnement'.tr : 'Être vu davantage'.tr),
+            subtitle: Text(
+              switch (session.plan) {
+                'premium' => 'Premium — position sponsorisée active',
+                'pro' => 'Pro — profil mis en avant',
+                _ => 'Aucune commission sur ton travail, jamais',
+              },
+              style: const TextStyle(fontSize: 12),
+            ),
+            trailing: session.isPro
+                ? null
+                : const Icon(Icons.chevron_right, color: Colors.black38),
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SubscriptionPage()),
+              );
+              if (context.mounted) await context.read<AppSession>().refresh();
+            },
+          ),
+          const Divider(height: 1),
+          // Parrainage de CLIENTS, jamais d'ouvriers. Faire venir d'autres
+          // ouvriers diluerait son propre fil de missions ; faire venir des
+          // clients apporte du travail dont il profite le premier.
+          ListTile(
+            leading: const Icon(Icons.group_add_outlined),
+            title: Text('Inviter mes clients'.tr),
+            subtitle: const Text(
+              'Ils publient une mission, ton profil remonte',
+              style: TextStyle(fontSize: 12),
+            ),
+            trailing: const Icon(Icons.chevron_right, color: Colors.black38),
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ReferralPage()),
+              );
+              if (context.mounted) await context.read<AppSession>().refresh();
+            },
+          ),
+        ] else ...[
           ListTile(
             leading: const Icon(Icons.construction_outlined),
             title: Text('Devenir ouvrier'.tr),
@@ -152,6 +275,25 @@ class _ProfilePageState extends State<ProfilePage> {
               MaterialPageRoute(builder: (_) => const WorkerSetupPage()),
             ),
           ),
+          const Divider(height: 1),
+          // Côté client, le parrainage ne rapporte rien à celui qui saisit
+          // le code — c'est son ouvrier qui gagne de la visibilité. Le dire
+          // ainsi vaut mieux qu'inventer un avantage qui n'existe pas.
+          ListTile(
+            leading: const Icon(Icons.card_giftcard_outlined),
+            title: Text('J\'ai un code d\'invitation'.tr),
+            subtitle: const Text(
+              'Un ouvrier t\'a recommandé l\'application ? Aide-le à être vu',
+              style: TextStyle(fontSize: 12),
+            ),
+            onTap: () async {
+              final ok = await ReferralClaimSheet.show(context);
+              if (ok && context.mounted) {
+                showOk(context, 'Code enregistré. Merci !');
+              }
+            },
+          ),
+        ],
         if (session.isAdmin) ...[
           const Divider(height: 1),
           ListTile(

@@ -45,6 +45,36 @@ class MobileAdsBackend implements AdsBackend {
   }
 
   @override
+  Future<void> showAppOpen(String adUnitId) {
+    final done = Completer<void>();
+    AppOpenAd.load(
+      adUnitId: adUnitId,
+      request: const AdRequest(),
+      adLoadCallback: AppOpenAdLoadCallback(
+        onAdLoaded: (ad) {
+          ad.fullScreenContentCallback = FullScreenContentCallback(
+            onAdDismissedFullScreenContent: (a) {
+              a.dispose();
+              if (!done.isCompleted) done.complete();
+            },
+            onAdFailedToShowFullScreenContent: (a, _) {
+              a.dispose();
+              if (!done.isCompleted) done.complete();
+            },
+          );
+          ad.show();
+        },
+        // Un échec de chargement est silencieux : l'utilisateur revient
+        // dans l'application, il ne doit rien voir d'anormal.
+        onAdFailedToLoad: (_) {
+          if (!done.isCompleted) done.complete();
+        },
+      ),
+    );
+    return done.future;
+  }
+
+  @override
   Future<bool> showRewarded({
     required String adUnitId,
     required String userId,
@@ -76,6 +106,45 @@ class MobileAdsBackend implements AdsBackend {
           ad.show(onUserEarnedReward: (_, __) => earned = true);
         },
         onAdFailedToLoad: (_) {
+          if (!done.isCompleted) done.complete(false);
+        },
+      ),
+    );
+    return done.future;
+  }
+
+  @override
+  Future<bool> showRewardedInterstitial({
+    required String adUnitId,
+    required String userId,
+    required String customData,
+  }) {
+    final done = Completer<bool>();
+    RewardedInterstitialAd.load(
+      adUnitId: adUnitId,
+      request: const AdRequest(),
+      rewardedInterstitialAdLoadCallback: RewardedInterstitialAdLoadCallback(
+        onAdLoaded: (ad) {
+          ad.setServerSideOptions(
+            ServerSideVerificationOptions(userId: userId, customData: customData),
+          );
+
+          var earned = false;
+          ad.fullScreenContentCallback = FullScreenContentCallback(
+            onAdDismissedFullScreenContent: (a) {
+              a.dispose();
+              if (!done.isCompleted) done.complete(earned);
+            },
+            onAdFailedToShowFullScreenContent: (a, _) {
+              a.dispose();
+              if (!done.isCompleted) done.complete(false);
+            },
+          );
+          ad.show(onUserEarnedReward: (_, __) => earned = true);
+        },
+        onAdFailedToLoad: (_) {
+          // Inventaire vide : on n'a pas le droit de bloquer l'utilisateur
+          // pour autant. L'appelant poursuit son action.
           if (!done.isCompleted) done.complete(false);
         },
       ),

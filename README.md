@@ -125,7 +125,22 @@ options à venir : mise en avant du profil, services premium).
 ### Tout est gratuit, y compris la prise de contact
 
 Personne ne paie pour se mettre en relation : ni le client, ni l'ouvrier.
-Le revenu repose entièrement sur la publicité.
+Le revenu vient de la publicité, et — depuis les migrations 12 à 17 — de
+l'abonnement optionnel des ouvriers.
+
+**Aucune commission n'est prélevée sur le travail, et ce n'est pas
+provisoire.** Sans encaissement de la prestation, sans séquestre et sans
+garantie, une commission serait déclarative : les deux parties
+s'arrangeraient hors de l'application et il n'y aurait rien à collecter.
+L'abonnement, lui, facture la visibilité — un service que la plateforme
+rend réellement et qu'aucun arrangement direct ne remplace. C'est aussi
+l'argument commercial le plus simple face aux plateformes à commission :
+un ouvrier leur verse souvent sur un seul chantier ce qu'un mois
+d'abonnement coûte ici.
+
+Le taux de fuite hors plateforme, mesuré sur le tableau de bord admin,
+dira si cette position doit un jour évoluer. Au-delà de 60 %, la question
+est tranchée pour de bon.
 
 Le paywall n'a pas été supprimé pour autant, il a été **désactivé par une
 valeur**. `job_requests.unlock_cost` vaut 0 ; toute la mécanique de crédits,
@@ -175,22 +190,60 @@ loin. En rendant le contact gratuit, tu perds l'occasion la plus naturelle
 d'en proposer un. Les bannières et interstitiels rapportent nettement moins,
 surtout aux eCPM pratiqués sur ce marché.
 
+### Ce qui est autorisé, et ce qui fait suspendre le compte
+
+Une règle AdMob décide de tout ici : **une annonce `rewarded` ne peut être
+diffusée qu'après un opt-in affirmatif, publicité par publicité.** Forcer
+son visionnage — avant une candidature, avant la saisie d'un besoin,
+n'importe où — déclenche la violation *Disallowed Rewarded Implementation*
+et expose le compte à une suspension. Ce n'est pas un risque théorique.
+
+Deux formats permettent malgré tout un affichage quasi systématique, et ce
+sont les seuls employés :
+
+| Format | Imposable ? | Condition |
+|---|---|---|
+| `interstitial` | oui, sans skip | entre deux écrans, jamais pendant une action ni à chaque action |
+| `rewarded_interstitial` | oui, sans opt-in | écran d'introduction annonçant la récompense **et** bouton pour passer |
+| `rewarded` | non | bouton explicite à chaque fois |
+
+L'écran d'introduction est `AdIntro.ask()` dans `widgets/ad_intro.dart`.
+Ses libellés viennent de `ad_placements`, mais **le bouton pour passer est
+une pièce de conformité, pas un réglage** : le masquer ou le griser remet
+le compte en infraction.
+
+Où les publicités se jouent, et pourquoi :
+
+- **Ouvrier, à la candidature** (`apply_rewarded_interstitial`) — c'est la
+  charge principale. La valeur y est reçue, et le volume suit l'activité
+  réelle de la marketplace plutôt que le nombre d'inscrits. Elle ne bloque
+  jamais l'envoi : inventaire vide ou refus, la candidature part quand même.
+- **Client, après validation du besoin** (`job_post_after_interstitial`) —
+  actif par défaut. Le côté rare d'une marketplace de services n'est pas
+  l'ouvrier mais le client qui a un vrai chantier ; lui imposer une vidéo
+  avant qu'il puisse décrire son problème ajoute de la friction à l'instant
+  où son engagement est encore nul.
+- **Client, avant la saisie** (`job_post_before_interstitial`) — construit,
+  désactivé. `app_settings.client_job_ad_placement` bascule entre les deux
+  depuis le tableau de bord admin, sans republier. Surveiller le nombre de
+  missions publiées après chaque bascule.
+
+Un garde-fou global (`ad_min_seconds_between_any`, 45 s par défaut) empêche
+deux pleins écrans de s'enchaîner, quels que soient leurs emplacements.
+
 ### Le point bloquant à traiter
 
-Le chemin « vidéo récompensée » **ne peut pas encore accorder de crédit**.
+Le chemin récompensé **n'accorde de crédit qu'une fois `admob-ssv`
+déployée** — la fonction est écrite (`supabase/functions/admob-ssv`), il
+reste à la déployer et à déclarer son URL dans la console AdMob. Voir
+`docs/deploiement.md`.
 
-`AdsService.showRewarded()` journalise l'impression, affiche la vidéo, puis
-attend qu'AdMob confirme le visionnage via sa callback *Server-Side
-Verification*. Tant que l'Edge Function `admob-ssv` n'est pas déployée, cette
-attente expire et la méthode rend `null`.
-
-C'est délibéré. La politique RLS interdit au téléphone d'écrire
-`ssv_verified` ou `reward_credits` : sans vérification serveur, une version
-modifiée de l'app se créditerait à l'infini. Mieux vaut ne rien accorder que
+Tant qu'elle ne l'est pas, `AdsService.showRewarded()` attend une
+confirmation qui n'arrive jamais et rend `null`. C'est délibéré : la
+politique RLS interdit au téléphone d'écrire `ssv_verified` ou
+`reward_credits`, et sans vérification serveur une version modifiée de
+l'app se créditerait à l'infini. Mieux vaut ne rien accorder que
 d'accorder l'invérifiable.
-
-Ce qui fonctionne en attendant : le quota de 3 déverrouillages offerts, et les
-crédits accordés manuellement en base.
 
 ---
 
@@ -284,16 +337,88 @@ cliquer sur ses propres publicités fait suspendre le compte.
 
 ---
 
+## Abonnements
+
+Trois plans (`free`, `pro`, `premium`), en mensuel ou en annuel, avec une
+grille tarifaire **par pays** dans `plan_prices` : les conditions
+économiques d'Abidjan et de Lagos n'ont rien de commun, et l'inflation ne
+suit pas le rythme des publications sur le Play Store. Le repli `XX` sert
+de tarif par défaut — une absence de ligne ne doit jamais empêcher
+d'afficher un prix.
+
+Le mensuel est la porte d'entrée, l'annuel se vend par la remise : dix mois
+payés pour douze. Le mobile money ouest-africain est une culture de petits
+montants fréquents ; demander une année d'avance à un artisan du secteur
+informel écarterait la majorité de la cible.
+
+Le premium achète une **position sponsorisée plafonnée** : au plus un
+résultat sur quatre (`sponsored_slot_ratio`), jamais sous une note plancher
+(`sponsored_min_rating`), et le nombre de places est limité par le vivier
+organique disponible — sans ce dernier garde-fou, un métier comptant vingt
+abonnés et trois profils gratuits verrait sa première page devenir
+intégralement payante, ce qui détruirait la recherche. Les places
+sponsorisées portent la mention « SPONSORISÉ » : un client qui découvre
+seul que les premiers résultats sont achetés cesse de faire confiance à
+tout le classement.
+
+Deux règles de sécurité, non négociables :
+
+- **Le prix ne vient jamais du téléphone.** Il est relu dans `plan_prices`
+  par l'Edge Function `create-payment`, qui détient seule les clés
+  marchandes. Une requête modifiée achèterait sinon un premium annuel pour
+  un franc.
+- **L'application n'active jamais un abonnement.** Seul
+  `payment-webhook` le fait, après vérification de la signature HMAC.
+  `activate_subscription()` a son droit d'exécution révoqué pour `anon` et
+  `authenticated` : un APK décompilé ne peut rien en tirer.
+
+Fournisseurs : **GeniusPay** (page de checkout multi-opérateurs — Wave,
+Orange, MTN, Moov, carte) et **FedaPay**.
+
+---
+
+## Identité progressive
+
+L'inscription se fait par pseudo et mot de passe, sans SMS. Le numéro n'est
+exigé qu'au **premier acte engageant** : publier un besoin, ou se déclarer
+ouvrier. À ce moment, l'utilisateur a compris ce que l'application lui
+apporte, et le taux de complétion n'a plus rien à voir avec celui d'un
+formulaire d'inscription.
+
+Les triggers `job_requests_require_phone` et `worker_profiles_require_phone`
+l'imposent côté base. `has_phone()` permet à l'application de demander au
+bon moment plutôt que d'échouer après un formulaire rempli.
+
+Trois protections viennent avec : unicité du numéro, bannissement
+automatique du numéro d'un compte suspendu (levé à la réhabilitation), et
+refus d'enregistrer un numéro banni. Sans elles, une inscription anonyme
+rendrait la suspension purement décorative.
+
+---
+
 ## Prochaines étapes
 
-1. **Edge Function `admob-ssv`** — vérifier la signature de la callback AdMob
-   avec la clé publique Google, marquer `ssv_verified`, créditer via
-   `adjust_credits()`. Sans elle, la vidéo récompensée ne rapporte rien.
-2. **Activer l'authentification par SMS** dans Supabase (Auth → Providers →
-   Phone) avec un fournisseur SMS. Sans ça, aucune connexion n'est possible.
-3. **Buckets Storage** — `avatars`, `portfolio`, `job-photos` publics,
-   `id-documents` privé. Les photos de mission sont prévues dans le schéma
-   mais l'écran de publication ne les envoie pas encore.
-4. **Paiement Mobile Money** — CinetPay ou PayDunya, plus l'Edge Function de
-   callback. Le bouton existe déjà et affiche « bientôt disponible ».
-5. **Notifications push** — la table `devices` attend les jetons FCM.
+Le détail opérationnel est dans **`docs/deploiement.md`**. En résumé :
+
+1. **`flutter analyze` puis un lancement sur appareil réel.** Le code n'a
+   toujours pas été compilé ; tout le reste en dépend.
+2. **Appliquer les migrations 12 à 17** (`supabase db push`). La 13 doit
+   passer seule — PostgreSQL refuse d'utiliser une valeur d'énumération
+   dans la transaction qui l'a créée. La 16 s'interrompt volontairement si
+   deux profils partagent un numéro.
+3. **Déployer les trois Edge Functions** et renseigner les secrets des
+   fournisseurs.
+4. **Déclarer l'URL de vérification serveur** dans la console AdMob, puis
+   remplacer les identifiants d'unités de test — dont une unité
+   **interstitiel récompensé**, format nouveau dans ce projet.
+5. **Notifications push** — seul lot non terminé. `DevicesService` sait
+   enregistrer et retirer un jeton ; obtenir ce jeton exige
+   `firebase_messaging`, qui exige un `google-services.json` que seule ta
+   console Firebase peut produire. La dépendance n'a pas été ajoutée car
+   son absence ferait échouer la compilation Gradle.
+
+**Trois fonctions SQL appelées par l'application ne sont versionnées nulle
+part** : `username_available`, `set_my_location` et `get_my_location`. Elles
+existent sur `Ticonnect 1.0` — elles y ont été créées directement — mais
+rejouer le schéma sur un nouvel environnement les laisserait manquantes.
+À écrire dans une migration dès que possible.

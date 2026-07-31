@@ -33,8 +33,41 @@ Future<void> main() async {
   runApp(const TiconnectApp());
 }
 
-class TiconnectApp extends StatelessWidget {
+class TiconnectApp extends StatefulWidget {
   const TiconnectApp({super.key});
+
+  @override
+  State<TiconnectApp> createState() => _TiconnectAppState();
+}
+
+class _TiconnectAppState extends State<TiconnectApp>
+    with WidgetsBindingObserver {
+  /// Le premier passage au premier plan est celui du démarrage. AdMob
+  /// interdit d'y afficher une publicité de retour — et la sanctionne.
+  bool _firstResume = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    final first = _firstResume;
+    _firstResume = false;
+    // L'emplacement est désactivé par défaut en base : rien ne s'affiche
+    // tant qu'un administrateur ne l'active pas, ce qui laisse le temps de
+    // juger sur des chiffres réels si la gêne vaut le revenu.
+    unawaited(AdsService.maybeShowAppOpen(firstLaunch: first));
+  }
 
   @override
   Widget build(BuildContext context) {

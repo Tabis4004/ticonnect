@@ -16,3 +16,6 @@ dev.json
 supabase/seed_dev.sql
 .wrangler/
 .wrangler/
+
+# Modèle économique : le dépôt est public, les hypothèses de revenu n'y ont pas leur place.
+modele-economique-ticonnect.xlsx

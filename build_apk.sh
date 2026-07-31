@@ -8,6 +8,13 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+if [ ! -f android/key.properties ] || \
+   diff -q android/key.properties android/key.properties.example >/dev/null 2>&1; then
+  echo "android/key.properties n'est pas renseigné." >&2
+  echo "Lance d'abord : ./set_keystore_password.sh" >&2
+  exit 1
+fi
+
 echo "==> Nettoyage (obligatoire après le changement de nom de package)"
 flutter clean
 

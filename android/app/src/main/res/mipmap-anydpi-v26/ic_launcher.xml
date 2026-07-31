@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Icône adaptative : Android applique lui-même le masque (rond, goutte,
+     carré arrondi selon le lanceur). Le premier plan doit donc rester dans
+     la zone centrale sûre, d'où la marge dans icon-foreground.svg. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background"/>
+    <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+</adaptive-icon>

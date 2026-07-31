@@ -1,6 +1,24 @@
 import '../core/config.dart';
 import '../core/supabase.dart';
 import '../models/models.dart';
+import 'ads_service.dart';
+
+/// Issue d'une tentative de mise en avant par visionnage.
+///
+/// Trois cas se distinguent à l'usage : la vidéo n'était pas disponible
+/// (plafond journalier, hors ligne, inventaire vide), l'utilisateur a
+/// abandonné en cours de route, ou le serveur a refusé. Les confondre
+/// donnerait un message d'erreur générique là où l'ouvrier a besoin de
+/// savoir s'il doit réessayer plus tard ou tout de suite.
+enum BoostOutcome { success, unavailable, notVerified, error }
+
+class BoostResult {
+  final BoostOutcome outcome;
+  final DateTime? boostedUntil;
+  final String? message;
+  const BoostResult(this.outcome, {this.boostedUntil, this.message});
+  bool get ok => outcome == BoostOutcome.success;
+}
 
 class WorkersService {
   /// Recherche d'ouvriers (fonction SQL `search_workers`).
@@ -105,6 +123,49 @@ class WorkersService {
     await db
         .from('worker_profiles')
         .update({'availability': value}).eq('profile_id', uid!);
+  }
+
+  /// Mise en avant gagnée en regardant une vidéo jusqu'au bout.
+  ///
+  /// C'est le geste central du modèle : l'ouvrier n'achète pas sa
+  /// visibilité, il l'échange contre l'attention qui finance
+  /// l'application. Aucun paiement n'intervient, donc aucune contrainte
+  /// de facturation Google ni de moyen de paiement local.
+  ///
+  /// À n'appeler qu'après un geste explicite — c'est la condition de
+  /// conformité du format récompensé. `boosted_until` n'est plus
+  /// accessible en écriture directe depuis `column_privileges` : seul
+  /// `grant_boost`, qui exige une impression vérifiée par Google, peut
+  /// accorder la mise en avant.
+  static Future<BoostResult> boostByWatchingAd() async {
+    if (!await AdsService.canShow(AdKeys.boostRewarded)) {
+      return const BoostResult(
+        BoostOutcome.unavailable,
+        message: 'Aucune vidéo disponible pour le moment. Réessaie plus tard.',
+      );
+    }
+
+    final impressionId = await AdsService.showRewarded(AdKeys.boostRewarded);
+    if (impressionId == null) {
+      return const BoostResult(
+        BoostOutcome.notVerified,
+        message: "La vidéo n'a pas été validée. Regarde-la jusqu'au bout "
+            'pour être mis en avant.',
+      );
+    }
+
+    try {
+      final until = await db.rpc('grant_boost', params: {
+        'p_ad_impression_id': impressionId,
+      });
+      return BoostResult(
+        BoostOutcome.success,
+        boostedUntil:
+            until == null ? null : DateTime.parse(until as String).toLocal(),
+      );
+    } catch (e) {
+      return BoostResult(BoostOutcome.error, message: humanError(e));
+    }
   }
 }
 

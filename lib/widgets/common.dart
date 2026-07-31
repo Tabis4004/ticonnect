@@ -159,6 +159,10 @@ class WorkerCard extends StatelessWidget {
                       const SizedBox(width: 6),
                       const VerifiedBadge(),
                     ],
+                    // Position payante, annoncée comme telle. Un client qui
+                    // découvre par lui-même que les premiers résultats sont
+                    // achetés cesse de faire confiance à toute la recherche ;
+                    // le dire franchement coûte beaucoup moins cher.
                     if (worker.isBoosted) ...[
                       const SizedBox(width: 6),
                       Container(
@@ -167,7 +171,7 @@ class WorkerCard extends StatelessWidget {
                           color: AppTheme.accent.withValues(alpha: 0.18),
                           borderRadius: BorderRadius.circular(4),
                         ),
-                        child: const Text('EN AVANT',
+                        child: const Text('SPONSORISÉ',
                             style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold)),
                       ),
                     ],

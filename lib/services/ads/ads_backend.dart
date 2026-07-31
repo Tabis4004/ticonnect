@@ -20,12 +20,36 @@ abstract class AdsBackend {
 
   Future<void> showInterstitial(String adUnitId);
 
+  /// Publicité de retour dans l'application.
+  ///
+  /// Le seul format conçu pour des sessions rares et courtes, donc le seul
+  /// qui monétise raisonnablement le côté client — un demandeur ouvre
+  /// l'application quand il a un besoin, pas tous les jours.
+  ///
+  /// AdMob interdit de l'afficher au tout premier lancement et pendant un
+  /// chargement : elle ne doit apparaître qu'au retour d'une application
+  /// déjà utilisée, sur un écran prêt.
+  Future<void> showAppOpen(String adUnitId);
+
   /// Rend `true` si l'utilisateur a regardé la vidéo jusqu'au bout.
   ///
   /// [customData] est transmis à AdMob et revient dans la callback de
   /// vérification serveur : c'est ce qui relie la récompense à la bonne ligne
   /// de `ad_impressions`.
   Future<bool> showRewarded({
+    required String adUnitId,
+    required String userId,
+    required String customData,
+  });
+
+  /// Interstitiel récompensé.
+  ///
+  /// Seul format récompensé qu'AdMob autorise à lancer sans opt-in
+  /// publicité par publicité — à condition qu'un écran d'introduction
+  /// annonce la récompense et laisse la possibilité de passer. C'est cet
+  /// écran, côté application, qui rend l'automatisme légal : sans lui, on
+  /// retombe sur la violation « Disallowed Rewarded Implementation ».
+  Future<bool> showRewardedInterstitial({
     required String adUnitId,
     required String userId,
     required String customData,
