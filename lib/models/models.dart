@@ -110,6 +110,15 @@ class WorkerProfile {
   final DateTime? boostedUntil;
   final int freeUnlocksLeft;
 
+  /// Réactivité, calculée en base à partir des messages — jamais déclarée.
+  ///
+  /// `responseSample` compte les conversations retenues : sans lui, un taux
+  /// de 0 % sur une seule conversation se lirait comme un taux de 0 % sur
+  /// cent. Rien n'est affiché tant que l'échantillon est trop mince.
+  final double? responseRate;
+  final int? responseMedianMinutes;
+  final int responseSample;
+
   WorkerProfile({
     required this.profileId,
     required this.currency,
@@ -126,6 +135,9 @@ class WorkerProfile {
     this.rateMin,
     this.rateMax,
     this.boostedUntil,
+    this.responseRate,
+    this.responseMedianMinutes,
+    this.responseSample = 0,
   });
 
   bool get isVerified => verification == 'verified';
@@ -148,6 +160,13 @@ class WorkerProfile {
         isListed: m['is_listed'] as bool? ?? true,
         boostedUntil: _dt(m['boosted_until']),
         freeUnlocksLeft: _i(m['free_unlocks_left']),
+        // Les colonnes de réactivité n'existent pas encore sur toutes les
+        // bases : `_d` et `_i` rendent null et zéro sur une clé absente,
+        // et `responseSample` à zéro fait taire l'affichage — ce qui est
+        // exactement le comportement voulu tant qu'on ne mesure rien.
+        responseRate: _d(m['response_rate']),
+        responseMedianMinutes: (m['response_median_minutes'] as num?)?.toInt(),
+        responseSample: _i(m['response_sample']),
       );
 }
 

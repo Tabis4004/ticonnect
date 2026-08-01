@@ -15,6 +15,9 @@ class WebAdsBackend implements AdsBackend {
   Future<void> initialize() async {}
 
   @override
+  Future<void> setTestDevices(List<String> deviceIds) async {}
+
+  @override
   Widget? banner(String adUnitId) => null;
 
   @override

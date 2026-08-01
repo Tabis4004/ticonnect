@@ -207,16 +207,40 @@ branchées. Il s'activera de lui-même.
 
 ## 8. Réglages à surveiller après le lancement
 
-Tout se pilote depuis `app_settings`, via le tableau de bord admin, sans
-republier sur le Play Store.
+**Administration → icône réglages.** L'écran est généré depuis
+`app_settings` : chaque ligne y déclare son type de contrôle, ses bornes et
+son libellé, et l'application fabrique l'interface correspondante. Un
+réglage ajouté en base demain apparaît sans une ligne de Dart.
 
-| Clé | Défaut | Ce qu'elle arbitre |
-|---|---|---|
-| `client_job_ad_placement` | `after` | Publicité client avant ou après la saisie du besoin |
-| `worker_apply_ad_enabled` | `true` | Publicité à la candidature |
-| `sponsored_slot_ratio` | `4` | Un résultat sponsorisé toutes les N positions |
-| `sponsored_min_rating` | `3.5` | Note plancher pour occuper une place sponsorisée |
-| `ad_min_seconds_between_any` | `45` | Délai global entre deux pleins écrans |
+Les bornes sont appliquées par le trigger `app_settings_clamp`, donc quel
+que soit le chemin d'écriture — écran, éditeur SQL, appel direct. Une
+valeur hors limites est ramenée à la plus proche ; un type incohérent est
+refusé.
+
+| Groupe | Réglage | Défaut | Ce qu'il arbitre |
+|---|---|---|---|
+| Monétisation | `subscriptions_enabled` | `false` | Abonnements payants. À faux, le modèle repose sur le boost gagné par visionnage — le code reste en place |
+| Boost | `boost_duration_hours` | `6` | Durée gagnée par vidéo |
+| Boost | `boost_max_hours` | `24` | Cumul maximum |
+| Publicité | `client_job_ad_placement` | `after` | Publicité client avant ou après la saisie du besoin |
+| Publicité | `worker_apply_ad_enabled` | `true` | Publicité à la candidature |
+| Publicité | `ad_min_seconds_between_any` | `45` | Délai global entre deux pleins écrans |
+| Publicité | `ad_test_device_ids` | `[]` | Appareils recevant des pubs de test en production |
+| Recherche | `sponsored_slot_ratio` | `4` | Un résultat sponsorisé toutes les N positions |
+| Recherche | `sponsored_min_rating` | `3.5` | Note plancher pour occuper une place sponsorisée |
+| Parrainage | `referral_enabled` | `true` | Parrainage de clients par les ouvriers |
+| Parrainage | `referral_monthly_cap_days` | `20` | Plafond sur 30 jours glissants |
+| Parrainage | `referral_claim_window_days` | `30` | Délai pour saisir un code |
+| Parrainage | `referral_boost_days` | `[7,5,3,1]` | Jours gagnés, du 1ᵉʳ filleul au suivant |
+
+**Les deux curseurs qui comptent le plus** sont désormais
+`boost_duration_hours` et `boost_max_hours` : dans un modèle qui repose
+entièrement sur le boost gagné par visionnage, ce sont eux qui décident de
+la rareté de la mise en avant. Trop longs, tout le monde est boosté et
+personne ne l'est.
+
+Et `sponsored_min_rating` devient la **seule** protection de la qualité de
+la recherche. Ne la descendez pas sous 3,5.
 
 L'indicateur à regarder en premier est le **taux de fuite hors plateforme**,
 affiché sur le tableau de bord admin. Au-delà de 60 %, une commission sur

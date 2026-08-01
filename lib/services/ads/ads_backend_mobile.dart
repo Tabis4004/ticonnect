@@ -14,6 +14,14 @@ class MobileAdsBackend implements AdsBackend {
   Future<void> initialize() => MobileAds.instance.initialize();
 
   @override
+  Future<void> setTestDevices(List<String> deviceIds) async {
+    if (deviceIds.isEmpty) return;
+    await MobileAds.instance.updateRequestConfiguration(
+      RequestConfiguration(testDeviceIds: deviceIds),
+    );
+  }
+
+  @override
   Widget? banner(String adUnitId) => _BannerHost(adUnitId: adUnitId);
 
   @override

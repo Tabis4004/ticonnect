@@ -86,6 +86,14 @@ class AdsService {
     _initialized = true;
     await _backend.initialize();
     await Future.wait([loadPlacements(), SettingsService.load()]);
+
+    // Après le chargement des réglages, sinon la liste serait toujours
+    // vide. Enrôler un appareil se fait alors depuis la base, sans
+    // republier — indispensable quand la seule autre voie est un cycle
+    // de plusieurs jours sur la Play Console.
+    await _backend.setTestDevices(
+      SettingsService.strings(SettingKeys.adTestDeviceIds),
+    );
   }
 
   /// Recharge la configuration depuis la base.

@@ -9,6 +9,7 @@ import '../../models/models.dart';
 import '../../services/ads_service.dart';
 import '../../services/catalog_service.dart';
 import '../../services/session.dart';
+import '../../services/settings_service.dart';
 import '../../services/workers_service.dart';
 import '../../widgets/ad_intro.dart';
 import '../../widgets/common.dart';
@@ -217,6 +218,14 @@ class _ProfilePageState extends State<ProfilePage> {
               MaterialPageRoute(builder: (_) => const WorkerSetupPage()),
             ),
           ),
+          // Abonnements : masqués tant que le réglage est à faux. Le modèle
+          // repose sur le boost gagné par visionnage, mais tout le code de
+          // souscription reste en place derrière cet interrupteur.
+          //
+          // Un abonné existant garde l'accès à son abonnement en cours : le
+          // couper sans prévenir quelqu'un qui a payé serait indéfendable.
+          if (SettingsService.boolean(SettingKeys.subscriptionsEnabled, false) ||
+              session.isPro) ...[
           const Divider(height: 1),
           ListTile(
             leading: Icon(
@@ -245,10 +254,16 @@ class _ProfilePageState extends State<ProfilePage> {
               if (context.mounted) await context.read<AppSession>().refresh();
             },
           ),
+          ],
           const Divider(height: 1),
           // Parrainage de CLIENTS, jamais d'ouvriers. Faire venir d'autres
           // ouvriers diluerait son propre fil de missions ; faire venir des
           // clients apporte du travail dont il profite le premier.
+          //
+          // Dans un modèle sans abonnement, c'est la seule source de boost
+          // corrélée au fait d'amener de la demande réelle plutôt qu'au
+          // temps libre disponible pour regarder des vidéos.
+          if (SettingsService.boolean(SettingKeys.referralEnabled, true))
           ListTile(
             leading: const Icon(Icons.group_add_outlined),
             title: Text('Inviter mes clients'.tr),

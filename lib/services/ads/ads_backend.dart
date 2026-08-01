@@ -15,6 +15,18 @@ abstract class AdsBackend {
 
   Future<void> initialize();
 
+  /// Déclare les appareils qui recevront des publicités de test.
+  ///
+  /// Le seul moyen sûr de vérifier une intégration avec de vraies unités
+  /// publicitaires. Sur un appareil enrôlé, Google sert des annonces de
+  /// démonstration : les impressions et les clics ne comptent pas comme du
+  /// trafic incorrect, ce qui est le motif de suspension le plus courant.
+  ///
+  /// L'identifiant d'un appareil s'obtient en lançant l'application une
+  /// fois et en lisant le journal : le SDK y écrit une ligne
+  /// « Use RequestConfiguration.Builder().setTestDeviceIds(...) ».
+  Future<void> setTestDevices(List<String> deviceIds);
+
   /// Bannière prête à être insérée dans l'arbre, ou `null` si indisponible.
   Widget? banner(String adUnitId);
 

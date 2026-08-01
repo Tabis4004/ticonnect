@@ -6,6 +6,7 @@ import '../../core/theme.dart';
 import '../../services/ads_service.dart';
 import '../../services/settings_service.dart';
 import '../../widgets/common.dart';
+import 'settings_page.dart';
 
 /// Tableau de bord administrateur.
 ///
@@ -139,7 +140,23 @@ class _AdminPageState extends State<AdminPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Administration'),
-        actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
+        actions: [
+          // Tous les réglages de la plateforme, générés depuis la base.
+          // Onze d'entre eux n'étaient jusqu'ici modifiables que depuis
+          // l'éditeur SQL de Supabase.
+          IconButton(
+            tooltip: 'Réglages',
+            icon: const Icon(Icons.tune),
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SettingsPage()),
+              );
+              if (mounted) await _load();
+            },
+          ),
+          IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
+        ],
       ),
       body: _loading
           ? const Loading()
