@@ -175,9 +175,6 @@ class WorkerProfile {
         jobsCompleted: _i(m['jobs_completed']),
         isListed: m['is_listed'] as bool? ?? true,
         boostedUntil: _dt(m['boosted_until']),
-        responseRate: _d(m['response_rate']),
-        responseMedianMinutes: (m['response_median_minutes'] as num?)?.toInt(),
-        responseSample: _i(m['response_sample']),
         freeUnlocksLeft: _i(m['free_unlocks_left']),
         // Les colonnes de réactivité n'existent pas encore sur toutes les
         // bases : `_d` et `_i` rendent null et zéro sur une clé absente,
