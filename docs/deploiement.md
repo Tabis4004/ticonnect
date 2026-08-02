@@ -233,6 +233,26 @@ refusé.
 | Parrainage | `referral_claim_window_days` | `30` | Délai pour saisir un code |
 | Parrainage | `referral_boost_days` | `[7,5,3,1]` | Jours gagnés, du 1ᵉʳ filleul au suivant |
 
+### Ce que la réactivité mesure, et ce qu'elle ne voit pas
+
+Le tableau de bord admin affiche un taux de réponse et un délai médian.
+Ils portent sur la **messagerie interne uniquement**.
+
+Rien ne permet de savoir si un ouvrier a répondu sur WhatsApp, par appel ou
+par SMS. Ce n'est pas une limite technique à contourner : aucune API ne
+rapporte les échanges entre deux tiers. L'API WhatsApp Business ne
+remonte que les conversations passant par *votre* numéro d'entreprise.
+
+Conséquence à garder en tête : un ouvrier très réactif hors de
+l'application apparaîtra comme muet. Le taux de réponse mesure donc autant
+la **rétention des échanges dans l'application** que la réactivité des
+personnes. C'est pourquoi il se lit collé au taux de fuite hors
+plateforme — l'un explique l'autre.
+
+Un seuil minimal de trois conversations est appliqué avant d'annoncer quoi
+que ce soit : « répond à 0 % » après un seul message manqué serait faux et
+injuste.
+
 **Les deux curseurs qui comptent le plus** sont désormais
 `boost_duration_hours` et `boost_max_hours` : dans un modèle qui repose
 entièrement sur le boost gagné par visionnage, ce sont eux qui décident de

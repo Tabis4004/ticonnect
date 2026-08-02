@@ -35,6 +35,14 @@ class _AdminPageState extends State<AdminPage> {
   /// reste le seul modèle tenable.
   double? _leakRate;
 
+  /// Réactivité mesurée sur la messagerie interne — et sur elle seule.
+  ///
+  /// Ce que ces chiffres ne voient pas : tout ce qui se passe sur WhatsApp,
+  /// par appel ou par SMS. Un ouvrier peut répondre à tous ses clients en
+  /// dix minutes hors de l'application et afficher 0 % ici. À lire en
+  /// regard du taux de fuite, jamais isolément.
+  Map<String, dynamic>? _response;
+
   @override
   void initState() {
     super.initState();
@@ -97,6 +105,33 @@ class _AdminPageState extends State<AdminPage> {
       _leakRate = messages > 0 ? leaking / messages : null;
 
       await SettingsService.load();
+
+      // Agrégat de réactivité. Ne porte que sur la messagerie interne.
+      final workers = List<Map<String, dynamic>>.from(await db
+          .from('worker_profiles')
+          .select('response_rate, response_median_minutes, response_sample')
+          .gt('response_sample', 0));
+
+      if (workers.isNotEmpty) {
+        final rates = [
+          for (final w in workers) (w['response_rate'] as num?)?.toDouble() ?? 0
+        ];
+        final delays = [
+          for (final w in workers)
+            if (w['response_median_minutes'] != null)
+              (w['response_median_minutes'] as num).toDouble()
+        ]..sort();
+
+        _response = {
+          'ouvriers': workers.length,
+          'taux': rates.reduce((a, b) => a + b) / rates.length,
+          'delai': delays.isEmpty ? null : delays[delays.length ~/ 2],
+          'echantillon': workers.fold<int>(
+              0, (s, w) => s + ((w['response_sample'] as num?)?.toInt() ?? 0)),
+        };
+      } else {
+        _response = null;
+      }
 
       // Deux appels tolérants à l'échec : tant que les migrations `ad_rewards` et `ad_revenue_reporting`
       // ne sont pas appliquées, ces fonctions n'existent pas et le reste
@@ -199,6 +234,8 @@ class _AdminPageState extends State<AdminPage> {
                 const SizedBox(height: 24),
                 _adRevenueCard(),
                 const SizedBox(height: 24),
+                _responseCard(),
+                const SizedBox(height: 24),
                 _adPlacementCard(),
                 const SizedBox(height: 24),
                 const Text('Signalements ouverts',
@@ -276,6 +313,101 @@ class _AdminPageState extends State<AdminPage> {
               ]),
             ),
     );
+  }
+
+  /// Réactivité des ouvriers, mesurée sur la messagerie interne.
+  ///
+  /// La réserve affichée en bas de la carte n'est pas une précaution de
+  /// style : sans elle, ces chiffres se lisent comme une mesure de la
+  /// qualité des ouvriers, alors qu'ils mesurent surtout combien d'échanges
+  /// sont restés dans l'application.
+  Widget _responseCard() {
+    final r = _response;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE6EAE7)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Réactivité',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        const Text(
+          'Part des premiers messages clients auxquels l\'ouvrier a répondu, '
+          'et délai médian de cette première réponse.',
+          style: TextStyle(fontSize: 12, color: Colors.black54),
+        ),
+        const SizedBox(height: 12),
+        if (r == null)
+          const Text(
+            'Pas encore de données. Une conversation compte à partir du '
+            'moment où un client a écrit et où le délai de patience est '
+            'écoulé.',
+            style: TextStyle(fontSize: 12, color: Colors.black45),
+          )
+        else
+          Row(children: [
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('${(r['taux'] as double).toStringAsFixed(0)} %',
+                    style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primary)),
+                const Text('répondent',
+                    style: TextStyle(fontSize: 11, color: Colors.black54)),
+              ]),
+            ),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(_delay(r['delai'] as double?),
+                    style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primary)),
+                const Text('délai médian',
+                    style: TextStyle(fontSize: 11, color: Colors.black54)),
+              ]),
+            ),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('${r['ouvriers']}',
+                    style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primary)),
+                Text('ouvriers · ${r['echantillon']} conv.',
+                    style: const TextStyle(fontSize: 11, color: Colors.black54)),
+              ]),
+            ),
+          ]),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF6E5),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Text(
+            'Mesuré sur la messagerie interne uniquement. Les échanges partis '
+            'sur WhatsApp, en appel ou par SMS sont invisibles : un ouvrier '
+            'très réactif hors de l\'application apparaîtra ici comme muet. '
+            'À lire en regard du taux de fuite ci-dessous.',
+            style: TextStyle(fontSize: 11, color: Colors.black87),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  static String _delay(double? minutes) {
+    if (minutes == null) return '—';
+    if (minutes < 60) return '${minutes.round()} min';
+    if (minutes < 60 * 24) return '${(minutes / 60).round()} h';
+    return '${(minutes / 1440).round()} j';
   }
 
   /// Bascule du placement publicitaire côté client.

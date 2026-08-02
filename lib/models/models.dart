@@ -144,6 +144,22 @@ class WorkerProfile {
   bool get isBoosted =>
       boostedUntil != null && boostedUntil!.isAfter(DateTime.now());
 
+  /// Trois conversations minimum avant d'annoncer quoi que ce soit.
+  ///
+  /// « Répond à 0 % » après un seul message manqué est faux et injuste ;
+  /// « répond à 100 % » après une seule réponse est faux et trompeur. En
+  /// dessous du seuil, on n'affiche rien plutôt qu'un chiffre qui ment.
+  bool get hasResponseStats => responseSample >= 3 && responseRate != null;
+
+  /// Délai médian en clair : « 45 min », « 3 h », « 2 j ».
+  String? get responseDelayLabel {
+    final m = responseMedianMinutes;
+    if (m == null || !hasResponseStats) return null;
+    if (m < 60) return '$m min';
+    if (m < 60 * 24) return '${(m / 60).round()} h';
+    return '${(m / 1440).round()} j';
+  }
+
   factory WorkerProfile.fromMap(Map<String, dynamic> m) => WorkerProfile(
         profileId: m['profile_id'] as String,
         headline: m['headline'] as String?,
@@ -159,6 +175,9 @@ class WorkerProfile {
         jobsCompleted: _i(m['jobs_completed']),
         isListed: m['is_listed'] as bool? ?? true,
         boostedUntil: _dt(m['boosted_until']),
+        responseRate: _d(m['response_rate']),
+        responseMedianMinutes: (m['response_median_minutes'] as num?)?.toInt(),
+        responseSample: _i(m['response_sample']),
         freeUnlocksLeft: _i(m['free_unlocks_left']),
         // Les colonnes de réactivité n'existent pas encore sur toutes les
         // bases : `_d` et `_i` rendent null et zéro sur une clé absente,

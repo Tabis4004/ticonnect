@@ -140,6 +140,21 @@ class _WorkerDetailPageState extends State<WorkerDetailPage> {
                 _stat('${w.yearsExperience ?? 0} ans', 'expérience'),
                 _stat(Fmt.range(w.rateMin, w.rateMax, w.currency), Fmt.unit(w.pricingUnit)),
               ]),
+            // Réactivité : le signal que le client lit en premier quand il
+            // hésite entre deux profils. Rien n'est affiché sous trois
+            // conversations — « répond à 0 % » après un seul message manqué
+            // serait faux, et injuste pour l'ouvrier.
+            //
+            // Ne porte que sur la messagerie interne : un artisan qui
+            // répond sur WhatsApp n'apparaît pas ici. C'est une raison de
+            // plus de ne rien afficher quand la mesure est trop mince.
+            if (w != null && w.hasResponseStats) ...[
+              const SizedBox(height: 12),
+              _ResponseBadge(
+                rate: w.responseRate!,
+                delay: w.responseDelayLabel,
+              ),
+            ],
           ]),
         ),
         if (_trades.isNotEmpty)
@@ -238,4 +253,64 @@ class _WorkerDetailPageState extends State<WorkerDetailPage> {
         Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
         Text(label, style: const TextStyle(fontSize: 12, color: Colors.black54)),
       ]);
+}
+
+/// Bandeau de réactivité.
+///
+/// Formulé en langage courant — « répond en général en 2 h » — plutôt qu'en
+/// pourcentage nu. Un client cherche à savoir s'il aura une réponse, pas à
+/// lire une statistique.
+///
+/// Le vert n'est pas décoratif : au-dessus de 80 %, c'est un argument ; en
+/// dessous de 50 %, c'est un avertissement, et le taire rendrait service à
+/// l'ouvrier au détriment du client — qui est le côté rare de cette
+/// marketplace.
+class _ResponseBadge extends StatelessWidget {
+  final double rate;
+  final String? delay;
+
+  const _ResponseBadge({required this.rate, this.delay});
+
+  @override
+  Widget build(BuildContext context) {
+    final good = rate >= 80;
+    final poor = rate < 50;
+
+    final color = poor
+        ? AppTheme.danger
+        : good
+            ? AppTheme.primary
+            : AppTheme.accent;
+
+    final text = poor
+        ? 'Répond rarement aux messages'
+        : delay != null
+            ? 'Répond en général en $delay'
+            : 'Répond aux messages';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.30)),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(
+          poor ? Icons.schedule_outlined : Icons.chat_bubble_outline,
+          size: 15,
+          color: color,
+        ),
+        const SizedBox(width: 6),
+        Text(
+          text,
+          style: TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w600,
+            color: color,
+          ),
+        ),
+      ]),
+    );
+  }
 }
