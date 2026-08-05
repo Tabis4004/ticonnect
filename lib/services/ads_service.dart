@@ -81,6 +81,14 @@ class AdsService {
   /// qu'AdMob sanctionne autant que les utilisateurs.
   static DateTime? _lastFullScreen;
 
+  /// Cause du dernier échec d'affichage, à l'usage de l'appelant.
+  ///
+  /// `showRewarded` rend `null` dans trois cas très différents : annonce
+  /// introuvable, abandon en cours de vidéo, vérification serveur non
+  /// reçue. L'appelant n'avait aucun moyen de les distinguer et affichait
+  /// « regarde jusqu'au bout » même quand aucune vidéo ne s'était chargée.
+  static String? lastLoadError;
+
   static Future<void> init() async {
     if (_initialized) return;
     _initialized = true;
@@ -168,6 +176,50 @@ class AdsService {
     return true;
   }
 
+  /// Pourquoi un emplacement n'est pas jouable, en français.
+  ///
+  /// `canShow` rend un booléen, ce qui suffit au code mais pas à
+  /// l'utilisateur : « aucune vidéo disponible » alors que le plafond
+  /// journalier est simplement atteint envoie chercher une panne qui
+  /// n'existe pas. Rend `null` quand l'emplacement est jouable.
+  static Future<String?> blockReason(String key) async {
+    if (!_backend.supported) {
+      return 'Les publicités ne sont pas disponibles sur cette plateforme.';
+    }
+    final p = _placements[key];
+    if (p == null) return 'Emplacement inconnu.';
+    if (!p.isEnabled) return 'Emplacement désactivé par l\'administrateur.';
+    if (_unitFor(p) == null) return 'Aucune unité publicitaire configurée.';
+
+    final last = _lastShown[key];
+    if (last != null) {
+      final reste = p.minSecondsBetween - DateTime.now().difference(last).inSeconds;
+      if (reste > 0) return 'Patiente encore $reste secondes.';
+    }
+
+    if (_isFullScreen(p.format) && _lastFullScreen != null) {
+      final floor =
+          SettingsService.integer(SettingKeys.adMinSecondsBetweenAny, 45);
+      final reste = floor - DateTime.now().difference(_lastFullScreen!).inSeconds;
+      if (reste > 0) return 'Patiente encore $reste secondes.';
+    }
+
+    if (p.dailyCapPerUser != null && uid != null) {
+      final since = DateTime.now().subtract(const Duration(hours: 24));
+      final rows = await db
+          .from('ad_impressions')
+          .select('id')
+          .eq('profile_id', uid!)
+          .eq('placement_key', key)
+          .gte('created_at', since.toIso8601String());
+      if (rows.length >= p.dailyCapPerUser!) {
+        return 'Limite atteinte : ${p.dailyCapPerUser} vidéos par 24 heures. '
+            'Reviens demain.';
+      }
+    }
+    return null;
+  }
+
   // ------------------------------------------------------------- Bannière
   /// Widget de bannière, ou `null` s'il n'y a rien à afficher.
   static Widget? bannerWidget(String key) {
@@ -188,7 +240,7 @@ class AdsService {
     final unit = _unitFor(p)!;
     _lastShown[key] = DateTime.now();
     _lastFullScreen = DateTime.now();
-    unawaited(_log(key, p.format));
+    unawaited(_log(key, p.format, unit));
     await _backend.showInterstitial(unit);
   }
 
@@ -210,7 +262,7 @@ class AdsService {
     final unit = _unitFor(p)!;
     _lastShown[AdKeys.appOpen] = DateTime.now();
     _lastFullScreen = DateTime.now();
-    unawaited(_log(AdKeys.appOpen, p.format));
+    unawaited(_log(AdKeys.appOpen, p.format, unit));
     await _backend.showAppOpen(unit);
   }
 
@@ -233,18 +285,29 @@ class AdsService {
     final me = uid;
     if (me == null) return null;
 
-    final impressionId = await _openImpression(key, p.format);
+    final impressionId = await _openImpression(key, p.format, adUnitId: unit);
     if (impressionId == null) return null;
 
     _lastShown[key] = DateTime.now();
     _lastFullScreen = DateTime.now();
 
-    final earned = await _backend.showRewardedInterstitial(
+    final issue = await _backend.showRewardedInterstitial(
       adUnitId: unit,
       userId: me,
       customData: impressionId,
     );
-    if (!earned) return null;
+    if (issue.loadError != null) {
+      lastLoadError = issue.loadError;
+      unawaited(_noteLoadError(impressionId, issue.loadError!));
+      return null;
+    }
+    lastLoadError = null;
+    if (!issue.earned) return null;
+
+    // La vidéo est allée à son terme : à partir d'ici, et seulement ici,
+    // AdMob s'engage à envoyer une callback de vérification. C'est donc le
+    // seul dénominateur honnête pour juger de la santé de `admob-ssv`.
+    unawaited(_noteEarned(impressionId));
 
     // Pas de récompense en crédits sur cet emplacement : inutile
     // d'immobiliser l'utilisateur douze secondes en attendant la callback.
@@ -258,7 +321,11 @@ class AdsService {
   ///
   /// La RLS impose `ssv_verified = false` et `reward_credits = 0` : c'est la
   /// callback serveur d'AdMob qui validera, jamais le téléphone.
-  static Future<String?> _openImpression(String key, String format) async {
+  static Future<String?> _openImpression(
+    String key,
+    String format, {
+    String? adUnitId,
+  }) async {
     final me = uid;
     if (me == null) return null;
     try {
@@ -271,6 +338,10 @@ class AdsService {
             'ssv_verified': false,
             'reward_credits': 0,
             'country_code': AppConfig.defaultCountry,
+            // Trace du mode réel : une unité ca-app-pub-3940256099942544
+            // signale les publicités de démonstration, pour lesquelles
+            // aucune vérification serveur ne peut aboutir.
+            'ad_unit_id': adUnitId,
           })
           .select('id')
           .single();
@@ -296,17 +367,33 @@ class AdsService {
     if (me == null) return null;
 
     // 1. On journalise l'impression AVANT l'affichage.
-    final impressionId = await _openImpression(key, p.format);
+    final impressionId = await _openImpression(key, p.format, adUnitId: unit);
     if (impressionId == null) return null;
 
     _lastShown[key] = DateTime.now();
     _lastFullScreen = DateTime.now();
-    final earned = await _backend.showRewarded(
+    final issue = await _backend.showRewarded(
       adUnitId: unit,
       userId: me,
       customData: impressionId,
     );
-    if (!earned) return null;
+
+    // La cause d'échec est consignée sur l'impression : c'est elle qui
+    // distingue « aucun annonceur disponible » d'« abandon en cours de
+    // route », deux situations que l'utilisateur vit différemment et
+    // qu'un simple booléen confondait.
+    if (issue.loadError != null) {
+      lastLoadError = issue.loadError;
+      unawaited(_noteLoadError(impressionId, issue.loadError!));
+      return null;
+    }
+    lastLoadError = null;
+    if (!issue.earned) return null;
+
+    // La vidéo est allée à son terme : à partir d'ici, et seulement ici,
+    // AdMob s'engage à envoyer une callback de vérification. C'est donc le
+    // seul dénominateur honnête pour juger de la santé de `admob-ssv`.
+    unawaited(_noteEarned(impressionId));
 
     // 2. La callback SSV d'AdMob arrive de façon asynchrone.
     final verified = await _waitForVerification(impressionId);
@@ -339,7 +426,36 @@ class AdsService {
     return false;
   }
 
-  static Future<void> _log(String key, String format) async {
+  /// Consigne l'échec sur l'impression déjà ouverte.
+  ///
+  /// Silencieux en cas d'erreur : un diagnostic qui casse le parcours
+  /// serait pire que l'absence de diagnostic.
+  static Future<void> _noteLoadError(String impressionId, String message) async {
+    try {
+      await db
+          .from('ad_impressions')
+          .update({'load_error': message}).eq('id', impressionId);
+    } catch (_) {}
+  }
+
+  /// Marque la récompense comme gagnée, côté application.
+  ///
+  /// Sans ce repère, une vidéo abandonnée à mi-parcours et une callback de
+  /// vérification perdue produisent exactement la même ligne : chargée,
+  /// non vérifiée. Le tableau de bord confondait les deux et accusait
+  /// l'Edge Function d'une désaffection des utilisateurs.
+  ///
+  /// N'accorde évidemment aucun droit : `grant_boost()` exige
+  /// `ssv_verified`, que seul le serveur peut écrire. Ce champ ne sert
+  /// qu'à la mesure.
+  static Future<void> _noteEarned(String impressionId) async {
+    try {
+      await db.from('ad_impressions').update(
+          {'earned_at': DateTime.now().toIso8601String()}).eq('id', impressionId);
+    } catch (_) {}
+  }
+
+  static Future<void> _log(String key, String format, [String? adUnitId]) async {
     if (uid == null) return;
     try {
       await db.from('ad_impressions').insert({
@@ -349,6 +465,7 @@ class AdsService {
         'ssv_verified': false,
         'reward_credits': 0,
         'country_code': AppConfig.defaultCountry,
+        'ad_unit_id': adUnitId,
       });
     } catch (_) {}
   }
@@ -371,6 +488,13 @@ class AdKeys {
   /// Ouvrier, avant l'envoi d'une candidature. Le format récompensé
   /// automatique — précédé de son écran d'introduction.
   static const applyRewardedInterstitial = 'apply_rewarded_interstitial';
+
+  /// Interstitiels imposés à la candidature. Un seul des deux est actif,
+  /// selon `worker_apply_ad_placement`. Sans écran d'introduction ni
+  /// sortie de notre fait : le format l'autorise, contrairement au
+  /// récompensé.
+  static const applyBeforeInterstitial = 'apply_before_interstitial';
+  static const applyAfterInterstitial  = 'apply_after_interstitial';
 
   /// Client, avant la saisie du besoin. Désactivé par défaut.
   static const jobPostBefore = 'job_post_before_interstitial';

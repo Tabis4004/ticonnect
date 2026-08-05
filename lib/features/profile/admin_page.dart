@@ -25,7 +25,11 @@ class _AdminPageState extends State<AdminPage> {
   List<Map<String, dynamic>> _reports = [];
   List<Map<String, dynamic>> _leaks = [];
   List<Map<String, dynamic>> _adRevenue = [];
+  List<Map<String, dynamic>> _adDiag = [];
+  List<Map<String, dynamic>> _jobs = [];
   Map<String, dynamic>? _ssvHealth;
+  bool _isSuper = false;
+  bool _busyJobs = false;
   bool _loading = true;
   bool _savingSetting = false;
 
@@ -149,6 +153,27 @@ class _AdminPageState extends State<AdminPage> {
       } catch (_) {
         _ssvHealth = null;
       }
+      try {
+        _adDiag = List<Map<String, dynamic>>.from(
+            await db.rpc('ad_diagnostics', params: {'p_limit': 15}));
+      } catch (_) {
+        _adDiag = [];
+      }
+      try {
+        _isSuper = (await db.rpc('is_superadmin') as bool?) ?? false;
+      } catch (_) {
+        _isSuper = false;
+      }
+      try {
+        _jobs = List<Map<String, dynamic>>.from(await db
+            .from('job_requests')
+            .select('id, title, city, status, created_at, '
+                'client:profiles!job_requests_client_id_fkey(username, full_name)')
+            .order('created_at', ascending: false)
+            .limit(30));
+      } catch (_) {
+        _jobs = [];
+      }
 
       _reports = List<Map<String, dynamic>>.from(await db
           .from('reports')
@@ -232,6 +257,10 @@ class _AdminPageState extends State<AdminPage> {
                   ],
                 ),
                 const SizedBox(height: 24),
+                _jobsCard(),
+                const SizedBox(height: 24),
+                _adDiagnosticsCard(),
+                const SizedBox(height: 24),
                 _adRevenueCard(),
                 const SizedBox(height: 24),
                 _responseCard(),
@@ -314,6 +343,30 @@ class _AdminPageState extends State<AdminPage> {
             ),
     );
   }
+
+  /// Une étape de l'entonnoir publicitaire.
+  ///
+  /// Séparer les trois n'est pas un raffinement d'affichage : ce sont trois
+  /// problèmes différents, avec trois responsables différents. Un
+  /// remplissage bas relève d'AdMob et de la maturité du compte ; une
+  /// complétion basse relève du produit et du placement ; seule une
+  /// vérification basse met en cause le code.
+  static Widget _funnel(String label, double? ratio, String hint) => Expanded(
+        child: Tooltip(
+          message: hint,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(
+              ratio == null ? '—' : '${(ratio * 100).toStringAsFixed(0)} %',
+              style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.primary),
+            ),
+            Text(label,
+                style: const TextStyle(fontSize: 11, color: Colors.black54)),
+          ]),
+        ),
+      );
 
   /// Réactivité des ouvriers, mesurée sur la messagerie interne.
   ///
@@ -415,6 +468,267 @@ class _AdminPageState extends State<AdminPage> {
   /// Le débat « avant ou après la saisie du besoin » ne se tranche pas en
   /// réunion : il se tranche sur le taux d'abandon du formulaire. D'où ce
   /// bouton, plutôt qu'une valeur figée dans le code.
+  Future<void> _createJob() async {
+    setState(() => _busyJobs = true);
+    try {
+      await db.rpc('admin_create_job', params: {
+        'p_title': 'Demande de test ${DateTime.now().toString().substring(11, 16)}',
+      });
+      if (mounted) showOk(context, 'Demande créée.');
+      await _load();
+    } catch (e) {
+      if (mounted) showError(context, humanError(e));
+    }
+    if (mounted) setState(() => _busyJobs = false);
+  }
+
+  Future<void> _deleteJob(String id, String titre) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Supprimer cette demande ?'),
+        content: Text('« $titre » et ses candidatures seront effacées.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Annuler')),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Supprimer')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    setState(() => _busyJobs = true);
+    try {
+      await db.rpc('admin_delete_job', params: {'p_job_id': id});
+      if (mounted) showOk(context, 'Demande supprimée.');
+      await _load();
+    } catch (e) {
+      if (mounted) showError(context, humanError(e));
+    }
+    if (mounted) setState(() => _busyJobs = false);
+  }
+
+  /// Purge totale.
+  ///
+  /// La confirmation par saisie n'est pas de la cérémonie : la suppression
+  /// cascade sur les candidatures et les conversations, et rien ne permet
+  /// de revenir en arrière. Un simple bouton « Oui » se clique par
+  /// réflexe, taper un mot demande d'y penser.
+  Future<void> _purgeJobs() async {
+    final saisie = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Vider toutes les demandes ?'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text(
+            'Irréversible. Les candidatures et les conversations liées '
+            'disparaissent aussi.\n\nTape VIDER pour confirmer.',
+            style: TextStyle(fontSize: 13),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: saisie,
+            autofocus: true,
+            decoration: const InputDecoration(hintText: 'VIDER'),
+          ),
+        ]),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Annuler')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+            onPressed: () => Navigator.pop(c, saisie.text.trim() == 'VIDER'),
+            child: const Text('Tout vider'),
+          ),
+        ],
+      ),
+    );
+    saisie.dispose();
+    if (ok != true) return;
+
+    setState(() => _busyJobs = true);
+    try {
+      final n = await db.rpc('admin_purge_jobs', params: {'p_confirm': 'VIDER'});
+      if (mounted) showOk(context, '$n demande(s) supprimée(s).');
+      await _load();
+    } catch (e) {
+      if (mounted) showError(context, humanError(e));
+    }
+    if (mounted) setState(() => _busyJobs = false);
+  }
+
+  /// Gestion des demandes.
+  ///
+  /// Un compte au rôle ouvrier ne voit ni l'onglet « Demandes » ni le
+  /// bouton de publication — c'est le parcours client. Tester le fil des
+  /// missions imposait donc de jongler entre deux comptes. Cette section
+  /// permet de fabriquer une demande sans changer d'identité.
+  Widget _jobsCard() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE6EAE7)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Expanded(
+            child: Text('Demandes',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+          ),
+          if (_busyJobs)
+            const SizedBox(
+                width: 18, height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2))
+          else
+            TextButton.icon(
+              onPressed: _createJob,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Ajouter'),
+            ),
+        ]),
+        const Text(
+          'Créer une demande de test sans passer par un compte client.',
+          style: TextStyle(fontSize: 12, color: Colors.black54),
+        ),
+        const SizedBox(height: 8),
+        if (_jobs.isEmpty)
+          const Text('Aucune demande.',
+              style: TextStyle(fontSize: 12, color: Colors.black54))
+        else
+          for (final j in _jobs)
+            ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: Text('${j['title']}',
+                  style: const TextStyle(fontSize: 13),
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: Text(
+                '${j['city']} · ${j['status']} · '
+                '${(j['client'] as Map?)?['username'] ?? "?"} · '
+                '${Fmt.ago(DateTime.tryParse(j['created_at'] as String? ?? ""))}',
+                style: const TextStyle(fontSize: 11),
+              ),
+              trailing: IconButton(
+                icon: Icon(Icons.delete_outline, color: Colors.red.shade400),
+                onPressed: _busyJobs
+                    ? null
+                    : () => _deleteJob('${j['id']}', '${j['title']}'),
+              ),
+            ),
+        // Réservé au superadministrateur, et masqué aux autres plutôt que
+        // grisé : un bouton visible mais inopérant invite à insister.
+        if (_isSuper) ...[
+          const Divider(height: 20),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: _busyJobs ? null : _purgeJobs,
+              icon: Icon(Icons.delete_sweep_outlined,
+                  size: 18, color: Colors.red.shade700),
+              label: Text('Vider toutes les demandes',
+                  style: TextStyle(color: Colors.red.shade700)),
+            ),
+          ),
+        ],
+      ]),
+    );
+  }
+
+  /// Diagnostic de la chaîne de récompense.
+  ///
+  /// Vérifier qu'un boost a fonctionné demandait cinq requêtes SQL et la
+  /// connaissance de subtilités invisibles : qu'une unité de démonstration
+  /// ne déclenche jamais de rappel, ou qu'un profil sous la note plancher
+  /// reste au classement organique même boosté. Les deux se manifestent
+  /// par « rien ne se passe ».
+  ///
+  /// Chaque ligne dit où la chaîne s'est arrêtée, et pourquoi.
+  Widget _adDiagnosticsCard() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE6EAE7)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Diagnostic publicitaire',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        const Text(
+          'Les derniers visionnages, étape par étape : affichée, vérifiée '
+          'par Google, échangée contre une mise en avant, boost actif.',
+          style: TextStyle(fontSize: 12, color: Colors.black54),
+        ),
+        const SizedBox(height: 12),
+        if (_adDiag.isEmpty)
+          const Text('Aucune impression enregistrée.',
+              style: TextStyle(fontSize: 12, color: Colors.black54))
+        else
+          for (final d in _adDiag) ...[
+            _diagRow(d),
+            const Divider(height: 18),
+          ],
+      ]),
+    );
+  }
+
+  Widget _diagRow(Map<String, dynamic> d) {
+    final etape = '${d['etape']}';
+    final mode = '${d['mode']}';
+    final blocage = d['blocage'] as String?;
+    final reste = '${d['boost_restant']}';
+
+    // Vert seulement au bout de la chaîne : tant qu'un boost n'est pas
+    // actif, rien n'a produit d'effet visible pour l'ouvrier.
+    final abouti = etape.startsWith('4/4');
+    final couleur = abouti
+        ? AppTheme.primary
+        : (mode == 'TEST' ? Colors.orange.shade700 : Colors.red.shade600);
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Icon(abouti ? Icons.check_circle : Icons.radio_button_unchecked,
+            size: 16, color: couleur),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(etape,
+              style: TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w600, color: couleur)),
+        ),
+        if (reste != '—')
+          Text('reste $reste',
+              style: const TextStyle(fontSize: 12, color: Colors.black54)),
+      ]),
+      const SizedBox(height: 2),
+      Text(
+        '${d['emplacement']} · ${d['ouvrier'] ?? "?"} · mode $mode'
+        '${d['note'] == null ? "" : " · note ${d['note']}"}'
+        '${d['sponsorisable'] == true ? " · sponsorisable" : ""}',
+        style: const TextStyle(fontSize: 11, color: Colors.black45),
+      ),
+      if (blocage != null) ...[
+        const SizedBox(height: 4),
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF4E5),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(blocage,
+              style: const TextStyle(fontSize: 11, color: Color(0xFF7A4B00))),
+        ),
+      ],
+    ]);
+  }
+
   /// Revenu publicitaire et santé de la vérification serveur.
   ///
   /// Toutes les projections du modèle reposent sur un eCPM estimé, faute
@@ -426,9 +740,24 @@ class _AdminPageState extends State<AdminPage> {
   /// leur mise en avant. On encaisse la gêne sans livrer la contrepartie,
   /// et c'est invisible depuis la console AdMob.
   Widget _adRevenueCard() {
-    final ratio = (_ssvHealth?['verified_ratio'] as num?)?.toDouble();
-    final rewarded = (_ssvHealth?['rewarded_impressions'] as num?)?.toInt() ?? 0;
-    final alert = rewarded > 0 && (ratio ?? 0) < 0.5;
+    // Trois taux distincts, et un seul qui met en cause `admob-ssv`.
+    //
+    // L'ancienne version divisait les vérifiées par toutes les tentatives et
+    // attribuait l'écart à l'Edge Function. Sur 21 tentatives : 9 n'avaient
+    // jamais chargé, 10 avaient été abandonnées en cours de vidéo, 2 avaient
+    // été récompensées — et vérifiées toutes les deux. La fonction traitait
+    // 100 % de ce qui lui arrivait ; l'alerte envoyait chercher une panne
+    // là où il n'y en avait pas.
+    final h = _ssvHealth;
+    final attempts = (h?['attempts'] as num?)?.toInt() ?? 0;
+    final earned = (h?['earned'] as num?)?.toInt() ?? 0;
+    final fill = (h?['fill_ratio'] as num?)?.toDouble();
+    final completion = (h?['completion_ratio'] as num?)?.toDouble();
+    final ratio = (h?['verified_ratio'] as num?)?.toDouble();
+
+    // On n'accuse la callback que si des récompenses ont réellement été
+    // gagnées sans être confirmées. Aucun visionnage complet : rien à dire.
+    final alert = earned > 0 && (ratio ?? 1) < 0.5;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -442,28 +771,44 @@ class _AdminPageState extends State<AdminPage> {
         const Text('Revenu publicitaire — 14 jours',
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
-        if (rewarded == 0)
-          const Text('Aucune vidéo récompensée sur les dernières 24 h.',
+        if (attempts == 0)
+          const Text('Aucune vidéo récompensée demandée sur les dernières 24 h.',
               style: TextStyle(fontSize: 12, color: Colors.black54))
-        else
+        else ...[
+          Row(children: [
+            _funnel('Remplissage', fill,
+                'annonces servies par AdMob sur les demandes'),
+            _funnel('Complétion', completion,
+                'vidéos regardées jusqu\'au bout'),
+            _funnel('Vérification', ratio,
+                'récompenses confirmées par la callback'),
+          ]),
+          const SizedBox(height: 8),
           Row(children: [
             Icon(alert ? Icons.error_outline : Icons.verified_outlined,
                 size: 18, color: alert ? Colors.red : AppTheme.primary),
             const SizedBox(width: 6),
             Expanded(
               child: Text(
-                'Vérification serveur : '
-                '${((ratio ?? 0) * 100).toStringAsFixed(0)} % '
-                'sur $rewarded visionnage(s) en 24 h'
-                '${alert ? " — vérifie que l'Edge Function admob-ssv est déployée" : ""}',
+                alert
+                    ? 'Des récompenses gagnées ne sont pas confirmées : '
+                        'vérifie que l\'URL de vérification serveur est bien '
+                        'déclarée dans la console AdMob.'
+                    : earned == 0
+                        ? 'Aucun visionnage mené à son terme en 24 h — rien à '
+                            'vérifier côté serveur. Un remplissage ou une '
+                            'complétion bas ne relèvent pas de l\'Edge Function.'
+                        : 'Callback de vérification saine sur $earned '
+                            'récompense(s) gagnée(s).',
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 11.5,
                   color: alert ? Colors.red : Colors.black54,
                   fontWeight: alert ? FontWeight.w600 : FontWeight.normal,
                 ),
               ),
             ),
           ]),
+        ],
         const SizedBox(height: 12),
         if (_adRevenue.isEmpty)
           const Text('Aucune impression enregistrée sur la période.',
