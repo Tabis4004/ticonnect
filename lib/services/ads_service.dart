@@ -92,16 +92,20 @@ class AdsService {
   static Future<void> init() async {
     if (_initialized) return;
     _initialized = true;
-    await _backend.initialize();
-    await Future.wait([loadPlacements(), SettingsService.load()]);
 
-    // Après le chargement des réglages, sinon la liste serait toujours
-    // vide. Enrôler un appareil se fait alors depuis la base, sans
-    // republier — indispensable quand la seule autre voie est un cycle
-    // de plusieurs jours sur la Play Console.
+    // Les réglages d'abord, car la liste des appareils de test en vient —
+    // et cette liste doit être posée AVANT `initialize()`. Le SDK fige sa
+    // configuration de requête au démarrage : déclarée après, elle ne
+    // s'applique qu'aux requêtes suivantes, et l'appareil reçoit de
+    // vraies annonces en attendant. C'était l'ordre précédent, et il
+    // faisait qu'un appareil pourtant enregistré ne voyait rien.
+    await SettingsService.load();
     await _backend.setTestDevices(
       SettingsService.strings(SettingKeys.adTestDeviceIds),
     );
+
+    await _backend.initialize();
+    await loadPlacements();
   }
 
   /// Recharge la configuration depuis la base.
