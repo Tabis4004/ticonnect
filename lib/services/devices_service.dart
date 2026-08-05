@@ -1,6 +1,5 @@
-import 'dart:io' show Platform;
-
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../core/supabase.dart';
@@ -67,11 +66,14 @@ class DevicesService {
     } catch (_) {}
   }
 
+  /// Plateforme courante, sans jamais toucher à `dart:io`.
+  ///
+  /// `dart:io` n'existe pas sur le web, et un garde `kIsWeb` ne protège que
+  /// l'exécution : l'import, lui, casse la compilation web même si la ligne
+  /// n'est jamais atteinte. `defaultTargetPlatform` vient de
+  /// `flutter/foundation` et fonctionne partout.
   static String get _platform {
     if (kIsWeb) return 'web';
-    try {
-      if (Platform.isIOS) return 'ios';
-    } catch (_) {}
-    return 'android';
+    return defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android';
   }
 }
