@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../core/formatters.dart';
 import '../../core/supabase.dart';
 import '../../core/theme.dart';
-import '../../services/ads_service.dart';
 import '../../services/settings_service.dart';
 import '../../widgets/common.dart';
 import 'settings_page.dart';
@@ -31,7 +30,6 @@ class _AdminPageState extends State<AdminPage> {
   bool _isSuper = false;
   bool _busyJobs = false;
   bool _loading = true;
-  bool _savingSetting = false;
 
   /// Part des conversations dont le premier échange contient déjà un
   /// numéro. C'est l'indicateur qui décide de tout : au-delà d'un certain
@@ -71,24 +69,11 @@ class _AdminPageState extends State<AdminPage> {
     }
   }
 
-  Future<void> _setPlacement(String mode) async {
-    setState(() => _savingSetting = true);
-    try {
-      await SettingsService.set(SettingKeys.clientJobAdPlacement, mode);
-      // Les emplacements portent aussi un drapeau d'activation : on aligne
-      // les deux, sinon un réglage dirait « avant » pendant que la table
-      // garderait l'emplacement désactivé.
-      await db.from('ad_placements').update({'is_enabled': mode == 'before'})
-          .eq('key', AdKeys.jobPostBefore);
-      await db.from('ad_placements').update({'is_enabled': mode == 'after'})
-          .eq('key', AdKeys.jobPostAfter);
-      await AdsService.loadPlacements();
-      if (mounted) showOk(context, 'Placement mis à jour.');
-    } catch (e) {
-      if (mounted) showError(context, humanError(e));
-    }
-    if (mounted) setState(() => _savingSetting = false);
-  }
+  // `_setPlacement` a été retiré : l'alignement des drapeaux `is_enabled`
+  // se fait désormais en base, par le trigger `app_settings_sync_placements`.
+  // Le tenir ici en Dart signifiait que l'écran de réglages générique et
+  // l'éditeur SQL écrivaient la valeur sans allumer l'emplacement — c'est
+  // exactement ce qui faisait qu'aucune annonce ne s'affichait côté ouvrier.
 
   Future<void> _load() async {
     setState(() => _loading = true);
@@ -865,9 +850,28 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
+  /// Renvoi vers l'écran de réglages, plutôt qu'un second jeu de contrôles.
+  ///
+  /// Cette carte pilotait autrefois le placement client avec ses propres
+  /// boutons, et affichait le réglage ouvrier en texte mort. D'où une
+  /// confusion légitime : on croyait que le côté ouvrier n'existait pas,
+  /// alors qu'il n'était simplement pas réglable ICI.
+  ///
+  /// Deux interfaces pour une même donnée, dont une incomplète : la moins
+  /// complète gagne toujours, parce que c'est celle qu'on trouve en premier.
+  /// L'écran de réglages les expose toutes, générées depuis la base.
   Widget _adPlacementCard() {
-    final mode = SettingsService.string(
+    final client = SettingsService.string(
         SettingKeys.clientJobAdPlacement, 'after');
+    final worker = SettingsService.string(
+        SettingKeys.workerApplyAdPlacement, 'rewarded');
+
+    String label(String v) => switch (v) {
+          'before' => 'avant',
+          'after' => 'après',
+          'rewarded' => 'récompensée',
+          _ => 'aucune',
+        };
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -877,41 +881,47 @@ class _AdminPageState extends State<AdminPage> {
         border: Border.all(color: const Color(0xFFE6EAE7)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Publicité côté client',
+        const Text('Réglages en vigueur',
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 4),
-        const Text(
-          'Où afficher l\'interstitiel lors de la publication d\'un besoin. '
-          '« Après » est recommandé : la friction tombe une fois l\'engagement '
-          'acquis. « Avant » garantit l\'affichage mais expose à l\'abandon du '
-          'formulaire. Surveille le nombre de missions publiées après chaque '
-          'bascule.',
-          style: TextStyle(fontSize: 12, color: Colors.black54),
-        ),
+        const SizedBox(height: 8),
+        _line('Publicité client', label(client)),
+        _line('Publicité ouvrier', label(worker)),
+        _line('Sponsorisé', '1 sur '
+            '${SettingsService.integer(SettingKeys.sponsoredSlotRatio, 4)}'),
+        _line('Note plancher',
+            '${SettingsService.decimal(SettingKeys.sponsoredMinRating, 3.5)}'),
+        _line('Boost par vidéo',
+            '${SettingsService.integer(SettingKeys.boostDurationHours, 6)} h '
+            '(max ${SettingsService.integer(SettingKeys.boostMaxHours, 24)} h)'),
         const SizedBox(height: 12),
-        if (_savingSetting)
-          const Loading()
-        else
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'before', label: Text('Avant')),
-              ButtonSegment(value: 'after', label: Text('Après')),
-              ButtonSegment(value: 'off', label: Text('Aucune')),
-            ],
-            selected: {mode},
-            onSelectionChanged: (s) => _setPlacement(s.first),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.tune, size: 18),
+            label: const Text('Modifier les réglages'),
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SettingsPage()),
+              );
+              if (mounted) await _load();
+            },
           ),
-        const SizedBox(height: 10),
-        Text(
-          'Publicité à la candidature (ouvrier) : '
-          '${SettingsService.boolean(SettingKeys.workerApplyAdEnabled, true) ? "activée" : "désactivée"} · '
-          'Un résultat sponsorisé sur '
-          '${SettingsService.integer(SettingKeys.sponsoredSlotRatio, 4)} · '
-          'Note plancher '
-          '${SettingsService.decimal(SettingKeys.sponsoredMinRating, 3.5)}',
-          style: const TextStyle(fontSize: 11, color: Colors.black45),
         ),
       ]),
     );
   }
+
+  static Widget _line(String label, String value) => Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Row(children: [
+          Expanded(
+            child: Text(label,
+                style: const TextStyle(fontSize: 12, color: Colors.black54)),
+          ),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w600)),
+        ]),
+      );
 }
