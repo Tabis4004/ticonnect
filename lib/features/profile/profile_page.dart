@@ -7,6 +7,7 @@ import '../../core/supabase.dart';
 import '../../core/theme.dart';
 import '../../models/models.dart';
 import '../../services/ads_service.dart';
+import '../../services/auth_service.dart';
 import '../../services/catalog_service.dart';
 import '../../services/session.dart';
 import '../../services/settings_service.dart';
@@ -413,8 +414,128 @@ class _ProfilePageState extends State<ProfilePage> {
               style: const TextStyle(color: AppTheme.danger)),
           onTap: () => context.read<AppSession>().signOut(),
         ),
+        const Divider(height: 1),
+        // Obligatoire depuis le 15 avril 2026 : Google Play exige que la
+        // suppression du compte puisse être demandée depuis l'application,
+        // et depuis une page web sans connexion. L'entrée doit être
+        // « facilement trouvable » — d'où sa place ici, au même niveau que
+        // la déconnexion, et non enfouie dans un écran d'aide.
+        ListTile(
+          leading: const Icon(Icons.delete_forever_outlined,
+              color: AppTheme.danger),
+          title: const Text('Supprimer mon compte',
+              style: TextStyle(color: AppTheme.danger)),
+          subtitle: const Text('Définitif. Aucune réactivation possible.',
+              style: TextStyle(fontSize: 12)),
+          onTap: _confirmerSuppression,
+        ),
       ]),
     );
+  }
+
+  /// Suppression du compte, en deux temps.
+  ///
+  /// La première boîte explique ce qui disparaît et ce qui reste ; la
+  /// seconde demande d'écrire un mot. Ce n'est pas de la cérémonie : la
+  /// suppression est irréversible et se déclenche depuis un écran où
+  /// l'entrée voisine est « Se déconnecter ». Un doigt qui glisse ne doit
+  /// pas suffire.
+  Future<void> _confirmerSuppression() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Supprimer ton compte ?'),
+        content: const SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Sont effacés définitivement :'),
+              SizedBox(height: 6),
+              Text('• ton pseudo, ton nom, ta ville, ta présentation\n'
+                  '• ton téléphone, ton WhatsApp, ton e-mail\n'
+                  '• ta position, si tu l\'avais enregistrée\n'
+                  '• ta fiche ouvrier, tes métiers, tes tarifs, ta note\n'
+                  '• tes candidatures, tes favoris, tes notifications'),
+              SizedBox(height: 12),
+              Text('Sont conservés :'),
+              SizedBox(height: 6),
+              // Le dire avant, pas après. Un utilisateur qui découvre que
+              // ses messages subsistent se sent trompé ; celui qui l'a lu
+              // avant de confirmer a choisi.
+              Text('Les conversations et les avis restent visibles pour les '
+                  'personnes concernées, sans ton nom : ils leur appartiennent '
+                  'aussi, et servent de preuve en cas de litige.'),
+              SizedBox(height: 12),
+              Text('Il n\'y a pas de réactivation. Pour revenir, il faudra '
+                  'créer un nouveau compte.'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Annuler'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: AppTheme.danger),
+            child: const Text('Continuer'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    final saisie = TextEditingController();
+    final confirme = await showDialog<bool>(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (_, setLocal) => AlertDialog(
+          title: const Text('Confirmer'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Écris SUPPRIMER en majuscules pour confirmer.'),
+              const SizedBox(height: 12),
+              TextField(
+                controller: saisie,
+                autofocus: true,
+                textCapitalization: TextCapitalization.characters,
+                decoration: const InputDecoration(border: OutlineInputBorder()),
+                onChanged: (_) => setLocal(() {}),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Annuler'),
+            ),
+            TextButton(
+              onPressed: saisie.text.trim() == 'SUPPRIMER'
+                  ? () => Navigator.pop(context, true)
+                  : null,
+              style: TextButton.styleFrom(foregroundColor: AppTheme.danger),
+              child: const Text('Supprimer définitivement'),
+            ),
+          ],
+        ),
+      ),
+    );
+    saisie.dispose();
+    if (confirme != true || !mounted) return;
+
+    try {
+      await AuthService.deleteMyAccount();
+    } catch (e) {
+      if (mounted) showError(context, humanError(e));
+      return;
+    }
+    // La session porte encore un jeton dont le compte n'existe plus : toute
+    // requête suivante échouerait en 401. On sort avant que l'écran ne se
+    // reconstruise.
+    if (mounted) await context.read<AppSession>().signOut();
   }
 }
 

@@ -105,4 +105,20 @@ class AuthService {
   }
 
   static Future<void> signOut() => db.auth.signOut();
+
+  /// Supprime définitivement le compte de l'utilisateur connecté.
+  ///
+  /// Exigence Google Play depuis le 15 avril 2026 : une application qui
+  /// permet de créer un compte doit permettre de le supprimer depuis
+  /// l'application, et depuis une page web accessible sans connexion
+  /// (`web/suppression-compte.html`).
+  ///
+  /// La fonction SQL réattribue conversations, messages, demandes et avis à
+  /// un profil anonyme avant de supprimer le compte : l'interlocuteur ne
+  /// doit pas perdre son historique parce que l'autre est parti. Tout le
+  /// reste — coordonnées, fiche ouvrier, position, appareils — est effacé
+  /// en cascade.
+  static Future<void> deleteMyAccount() async {
+    await db.rpc('delete_my_account');
+  }
 }

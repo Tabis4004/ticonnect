@@ -71,6 +71,13 @@ String humanError(Object error) {
       return "C'est le dernier superadministrateur. Nomme-en un autre "
           'avant de retirer celui-ci.';
     }
+    // Suppression de compte.
+    if (msg.contains('NOT_AUTHENTICATED')) {
+      return 'Reconnecte-toi avant de supprimer ton compte.';
+    }
+    if (msg.contains('PROFILE_NOT_FOUND')) {
+      return 'Ce compte a déjà été supprimé.';
+    }
     if (msg.contains('USER_UNKNOWN')) {
       return "Aucun compte ne porte ce pseudo. Vérifie l'orthographe.";
     }
