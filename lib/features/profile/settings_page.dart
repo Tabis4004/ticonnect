@@ -201,10 +201,59 @@ class _SettingsPageState extends State<SettingsPage> {
         return Text('$n élément${n > 1 ? "s" : ""}',
             style: const TextStyle(fontSize: 12, color: Colors.black45));
 
+      // Une adresse de fiche ou un numéro de version : trop long pour un
+      // champ dans la ligne, trop court pour un écran. On ouvre une boîte.
+      case 'text':
+        return TextButton(
+          onPressed: () => _editText(s),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 170),
+            child: Text(
+              '${s.value}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: const TextStyle(fontSize: 12),
+            ),
+          ),
+        );
+
       default:
         return Text('${s.value}',
             style: const TextStyle(fontSize: 12, color: Colors.black45));
     }
+  }
+
+  /// Éditeur d'une valeur textuelle.
+  ///
+  /// Le champ est prérempli et sélectionnable : le cas le plus fréquent
+  /// n'est pas d'écrire une adresse de zéro, mais de corriger un numéro de
+  /// version d'un chiffre.
+  Future<void> _editText(SettingDef s) async {
+    final champ = TextEditingController(text: '${s.value}');
+    final valeur = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(s.label ?? s.key),
+        content: TextField(
+          controller: champ,
+          autofocus: true,
+          decoration: const InputDecoration(border: OutlineInputBorder()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, champ.text.trim()),
+            child: const Text('Enregistrer'),
+          ),
+        ],
+      ),
+    );
+    champ.dispose();
+    if (valeur != null && valeur != '${s.value}') await _save(s, valeur);
   }
 
   /// Éditeur de liste : suffisant pour les deux usages actuels — les

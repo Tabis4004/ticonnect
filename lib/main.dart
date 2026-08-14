@@ -11,6 +11,7 @@ import 'core/theme.dart';
 import 'features/auth/auth_pages.dart';
 import 'features/onboarding/onboarding_page.dart';
 import 'features/shell/app_shell.dart';
+import 'features/update/update_gate.dart';
 import 'services/ads_service.dart';
 import 'services/push_service.dart';
 import 'services/session.dart';
@@ -88,7 +89,9 @@ class _TiconnectAppState extends State<TiconnectApp>
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light,
           locale: Locale(L.instance.lang),
-          home: const _Gate(),
+          // Le contrôle de version enveloppe l'aiguillage de session : une
+          // version retirée doit être arrêtée avant l'écran de connexion.
+          home: const UpdateGate(child: _Gate()),
         ),
       ),
     );
