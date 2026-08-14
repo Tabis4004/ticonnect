@@ -9,6 +9,7 @@ import 'core/config.dart';
 import 'core/l10n.dart';
 import 'core/theme.dart';
 import 'features/auth/auth_pages.dart';
+import 'features/auth/forced_password_page.dart';
 import 'features/onboarding/onboarding_page.dart';
 import 'features/shell/app_shell.dart';
 import 'features/update/update_gate.dart';
@@ -110,12 +111,19 @@ class _Gate extends StatelessWidget {
     }
     if (!session.isSignedIn) return const SignInPage();
 
+    // Mot de passe fixé par un administrateur : tant qu'il n'en a pas
+    // choisi un autre, rien ne s'affiche. Devant la visite guidée — un
+    // compte dont le mot de passe circule encore ne doit rien pouvoir
+    // faire.
+    //
     // Visite guidée : une fois, à la première ouverture qui suit
     // l'inscription. Placée ici plutôt que dans AppShell pour qu'elle
     // occupe l'écran entier, sans barre de navigation à contourner.
-    if (session.profile != null && session.profile!.onboardingSeenAt == null) {
-      return const OnboardingPage();
-    }
-    return const AppShell();
+    return PasswordGate(
+      child: (session.profile != null &&
+              session.profile!.onboardingSeenAt == null)
+          ? const OnboardingPage()
+          : const AppShell(),
+    );
   }
 }

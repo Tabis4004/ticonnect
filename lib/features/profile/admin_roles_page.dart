@@ -1,4 +1,7 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/supabase.dart';
 import '../../core/theme.dart';
@@ -70,12 +73,22 @@ class _AdminRolesPageState extends State<AdminRolesPage> {
     super.dispose();
   }
 
+  /// Le niveau de l'utilisateur courant. Décide de ce que la feuille
+  /// d'actions propose : un modérateur dépanne un mot de passe, il ne
+  /// nomme personne.
+  bool _isSuper = false;
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
       _erreur = null;
     });
     try {
+      try {
+        _isSuper = (await db.rpc('is_superadmin') as bool?) ?? false;
+      } catch (_) {
+        _isSuper = false;
+      }
       _users = List<Map<String, dynamic>>.from(await db.rpc(
         'search_profiles_for_admin',
         params: {'p_query': _search.text.trim(), 'p_limit': 100},
@@ -105,6 +118,183 @@ class _AdminRolesPageState extends State<AdminRolesPage> {
       if (mounted) showError(context, humanError(e));
     }
     if (mounted) setState(() => _busy = false);
+  }
+
+  /// Ce qu'on peut faire d'un compte. Deux gestes de portée très
+  /// différente, donc un choix explicite entre les deux plutôt qu'un accès
+  /// direct à l'un d'eux.
+  Future<void> _actions(Map<String, dynamic> u) async {
+    final username = '${u['username'] ?? '?'}';
+    final role = u['role'] as String?;
+    final cibleEstAdmin = role != null;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (c) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
+            child: Text('@$username',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          ),
+          if (_isSuper)
+            ListTile(
+              leading: const Icon(Icons.shield_outlined),
+              title: const Text("Changer le niveau d'accès"),
+              subtitle: Text(
+                role == null ? 'Aucun accès' : _roles[role]?.titre ?? role,
+                style: const TextStyle(fontSize: 12),
+              ),
+              onTap: () {
+                Navigator.pop(c);
+                _choisirRole(username, role);
+              },
+            ),
+          ListTile(
+            leading: Icon(Icons.key_outlined,
+                color: (cibleEstAdmin && !_isSuper) ? Colors.black26 : null),
+            title: const Text('Réinitialiser le mot de passe'),
+            subtitle: Text(
+              cibleEstAdmin && !_isSuper
+                  // Dit franchement plutôt que masqué : un bouton qui
+                  // disparaît fait douter de ses propres droits.
+                  ? 'Réservé au superadministrateur pour un compte qui a déjà '
+                      'un accès.'
+                  : "Fixe un mot de passe provisoire. L'utilisateur devra en "
+                      'choisir un autre à sa prochaine connexion.',
+              style: const TextStyle(fontSize: 12),
+            ),
+            enabled: !(cibleEstAdmin && !_isSuper),
+            onTap: () {
+              Navigator.pop(c);
+              _reinitialiser(u);
+            },
+          ),
+          const SizedBox(height: 8),
+        ]),
+      ),
+    );
+  }
+
+  /// Réinitialisation.
+  ///
+  /// Le mot de passe est fabriqué ici plutôt que saisi par l'administrateur :
+  /// celui qui doit le dicter au téléphone choisirait quelque chose de court
+  /// et de devinable, et le réutiliserait d'un compte à l'autre.
+  Future<void> _reinitialiser(Map<String, dynamic> u) async {
+    final username = '${u['username'] ?? '?'}';
+    final id = '${u['id']}';
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text('Réinitialiser le mot de passe de @$username ?'),
+        content: const Text(
+          "Son mot de passe actuel cessera immédiatement de fonctionner. "
+          "Tu obtiendras un mot de passe provisoire à lui transmettre, et il "
+          "devra en choisir un autre dès sa connexion suivante.\n\n"
+          "L'opération est enregistrée avec ton nom.",
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Annuler')),
+          TextButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: Text('Réinitialiser',
+                style: TextStyle(color: Colors.red.shade700)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    final motDePasse = _motDePasseProvisoire();
+    setState(() => _busy = true);
+    try {
+      final res = await db.functions.invoke(
+        'admin-reset-password',
+        body: {'profile_id': id, 'password': motDePasse},
+      );
+      final data = res.data;
+      if (data is Map && data['error'] != null) {
+        throw Exception('${data['error']}');
+      }
+      if (mounted) await _afficherMotDePasse(username, motDePasse);
+    } catch (e) {
+      if (mounted) showError(context, _messageReinit(e));
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
+  /// Affiché une seule fois, sans possibilité de le retrouver ensuite : il
+  /// n'est stocké nulle part en clair, pas même côté serveur.
+  Future<void> _afficherMotDePasse(String username, String motDePasse) async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (c) => AlertDialog(
+        title: const Text('Mot de passe provisoire'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('À transmettre à @$username, puis à oublier.',
+              style: const TextStyle(fontSize: 13)),
+          const SizedBox(height: 16),
+          SelectableText(
+            motDePasse,
+            style: const TextStyle(
+                fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 2),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            "Il ne sera plus affiché. S'il est perdu, refais une "
+            'réinitialisation.',
+            style: TextStyle(fontSize: 11, color: Colors.black54),
+            textAlign: TextAlign.center,
+          ),
+        ]),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: motDePasse));
+              if (c.mounted) Navigator.pop(c);
+              if (mounted) showOk(context, 'Copié');
+            },
+            child: const Text('Copier et fermer'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Douze caractères, sans les couples qu'on confond en les dictant :
+  /// ni O ni 0, ni I ni l ni 1. Le mot de passe passera par la voix ou par
+  /// un SMS, pas par un copier-coller.
+  String _motDePasseProvisoire() {
+    const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    final rnd = Random.secure();
+    return List.generate(12, (_) => alphabet[rnd.nextInt(alphabet.length)])
+        .join();
+  }
+
+  String _messageReinit(Object e) {
+    final s = '$e';
+    if (s.contains('RESET_ADMIN_FORBIDDEN')) {
+      return "Ce compte a déjà un accès d'administration. Seul un "
+          'superadministrateur peut réinitialiser son mot de passe.';
+    }
+    if (s.contains('RESET_SELF')) {
+      return 'Pour ton propre mot de passe, passe par Mon compte.';
+    }
+    if (s.contains('FORBIDDEN')) {
+      return "Tu n'as pas les droits pour cette action.";
+    }
+    if (s.contains('USER_UNKNOWN')) {
+      return "Ce compte n'existe plus. Actualise la liste.";
+    }
+    if (s.contains('PASSWORD_TOO_SHORT')) {
+      return 'Mot de passe trop court — signale-le, c\'est un défaut du code.';
+    }
+    return humanError(e);
   }
 
   /// Le niveau actuel porte une coche ; aucun n'est présélectionné pour un
@@ -220,7 +410,7 @@ class _AdminRolesPageState extends State<AdminRolesPage> {
               _loading
                   ? ''
                   : '${_users.length} compte(s) · $admins avec un accès · '
-                      'touche une ligne pour changer son niveau',
+                      'touche une ligne pour agir dessus',
               style: const TextStyle(fontSize: 12, color: Colors.black54),
             ),
           ),
@@ -305,7 +495,7 @@ class _AdminRolesPageState extends State<AdminRolesPage> {
           ),
         const Icon(Icons.chevron_right, color: Colors.black26),
       ]),
-      onTap: _busy ? null : () => _choisirRole(username, role),
+      onTap: _busy ? null : () => _actions(u),
     );
   }
 }
