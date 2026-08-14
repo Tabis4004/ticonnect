@@ -4,7 +4,7 @@ publish_to: 'none'
 # versionName+versionCode. Le versionCode (après le +) doit strictement
 # augmenter à chaque AAB déposé sur la Play Console : un numéro déjà utilisé
 # est refusé définitivement, même si le dépôt a été supprimé.
-version: 2.0.3+5
+version: 2.0.5+7
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
@@ -26,6 +26,11 @@ dependencies:
   # parce que `devices_service.dart` l'importe directement, et qu'un import
   # non déclaré est une erreur d'analyse.
   package_info_plus: ^10.2.1
+  # Notifications push. Exigent android/app/google-services.json, présent
+  # depuis le 6 août — sans ce fichier, la compilation Gradle échoue.
+  firebase_core: ^3.8.0
+  firebase_messaging: ^15.1.5
+  flutter_local_notifications: ^18.0.1
 
 dev_dependencies:
   flutter_lints: ^4.0.0

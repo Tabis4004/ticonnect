@@ -63,6 +63,25 @@ String humanError(Object error) {
     if (msg.contains('duplicate key')) {
       return 'Cette action a déjà été effectuée.';
     }
+
+    // Attribution d'une mission. Deux clients peuvent accepter au même
+    // moment sur la même demande, ou l'ouvrier avoir retiré sa candidature
+    // entre l'affichage de la liste et le clic : dire lequel des deux
+    // s'est produit évite de croire à une panne.
+    if (msg.contains('n\'est plus ouverte') ||
+        msg.contains('n est plus ouverte')) {
+      return 'Cette demande a déjà été attribuée. Actualise la liste.';
+    }
+    if (msg.contains('candidature a été retirée')) {
+      return "Cet ouvrier a retiré sa candidature entre-temps.";
+    }
+    if (msg.contains('peut accepter une candidature')) {
+      return "Seul l'auteur de la demande peut attribuer la mission.";
+    }
+    if (msg.contains('candidature acceptée ne se retire pas')) {
+      return "Tu as déjà été retenu. Préviens le client plutôt que de "
+          "retirer ta candidature.";
+    }
     if (error.code == '42501') {
       return "Tu n'as pas les droits pour cette action.";
     }

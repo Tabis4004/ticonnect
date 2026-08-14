@@ -3,6 +3,27 @@ import 'package:flutter/widgets.dart';
 export 'ads_backend_stub.dart'
     if (dart.library.io) 'ads_backend_mobile.dart';
 
+/// Issue de l'affichage d'une publicité récompensée.
+///
+/// Un simple booléen confondait trois situations que l'utilisateur vit
+/// très différemment : aucune annonce à servir, annonce interrompue, et
+/// récompense obtenue. On lui affichait « regarde jusqu'au bout » alors
+/// qu'aucune vidéo ne s'était chargée — message faux et culpabilisant,
+/// qui a coûté plusieurs séances de diagnostic.
+class RewardedOutcome {
+  /// Vrai si l'utilisateur a regardé jusqu'au bout.
+  final bool earned;
+
+  /// Renseigné quand l'annonce n'a même pas pu être chargée ou affichée.
+  /// Contient le code et le message du SDK, tels quels.
+  final String? loadError;
+
+  const RewardedOutcome({required this.earned, this.loadError});
+
+  /// L'annonce s'est bien affichée, quoi qu'il soit advenu ensuite.
+  bool get displayed => loadError == null;
+}
+
 /// Contrat commun aux deux implémentations publicitaires.
 ///
 /// `google_mobile_ads` ne supporte qu'Android et iOS : sur le web, le simple
@@ -43,12 +64,13 @@ abstract class AdsBackend {
   /// déjà utilisée, sur un écran prêt.
   Future<void> showAppOpen(String adUnitId);
 
-  /// Rend `true` si l'utilisateur a regardé la vidéo jusqu'au bout.
+  /// Décrit ce qui s'est réellement passé : chargement impossible,
+  /// abandon, ou récompense obtenue.
   ///
   /// [customData] est transmis à AdMob et revient dans la callback de
   /// vérification serveur : c'est ce qui relie la récompense à la bonne ligne
   /// de `ad_impressions`.
-  Future<bool> showRewarded({
+  Future<RewardedOutcome> showRewarded({
     required String adUnitId,
     required String userId,
     required String customData,
@@ -61,7 +83,7 @@ abstract class AdsBackend {
   /// annonce la récompense et laisse la possibilité de passer. C'est cet
   /// écran, côté application, qui rend l'automatisme légal : sans lui, on
   /// retombe sur la violation « Disallowed Rewarded Implementation ».
-  Future<bool> showRewardedInterstitial({
+  Future<RewardedOutcome> showRewardedInterstitial({
     required String adUnitId,
     required String userId,
     required String customData,

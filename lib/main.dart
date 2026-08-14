@@ -9,8 +9,10 @@ import 'core/config.dart';
 import 'core/l10n.dart';
 import 'core/theme.dart';
 import 'features/auth/auth_pages.dart';
+import 'features/onboarding/onboarding_page.dart';
 import 'features/shell/app_shell.dart';
 import 'services/ads_service.dart';
+import 'services/push_service.dart';
 import 'services/session.dart';
 import 'widgets/common.dart';
 
@@ -29,6 +31,10 @@ Future<void> main() async {
   // Le SDK publicitaire s'initialise en arrière-plan : on ne bloque pas
   // le premier écran, et une absence de réseau ne fige pas l'application.
   unawaited(AdsService.init());
+
+  // Idem pour les notifications : demander la permission ne doit pas
+  // retarder l'affichage, et un refus n'empêche rien d'autre.
+  unawaited(PushService.init());
 
   runApp(const TiconnectApp());
 }
@@ -100,6 +106,13 @@ class _Gate extends StatelessWidget {
       return const Scaffold(body: Loading());
     }
     if (!session.isSignedIn) return const SignInPage();
+
+    // Visite guidée : une fois, à la première ouverture qui suit
+    // l'inscription. Placée ici plutôt que dans AppShell pour qu'elle
+    // occupe l'écran entier, sans barre de navigation à contourner.
+    if (session.profile != null && session.profile!.onboardingSeenAt == null) {
+      return const OnboardingPage();
+    }
     return const AppShell();
   }
 }

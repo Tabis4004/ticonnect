@@ -1,5 +1,6 @@
 import '../core/config.dart';
 import '../core/supabase.dart';
+import 'session.dart';
 import '../models/models.dart';
 
 class JobsService {
@@ -13,7 +14,7 @@ class JobsService {
   }) async {
     final rows = await db.rpc('search_jobs', params: {
       'p_trade_ids': tradeIds,
-      'p_country_code': AppConfig.defaultCountry,
+      'p_country_code': AppSession.currentCountry,
       'p_city': city,
       'p_urgency': urgency,
       'p_limit': limit,
@@ -49,11 +50,18 @@ class JobsService {
     return rows.map<JobRequest>((e) => JobRequest.fromMap(e)).toList();
   }
 
+  /// [countryCode] : pays du CHANTIER, pas du client.
+  ///
+  /// Enregistrer le pays de résidence rendait une mission publiée depuis
+  /// Lomé pour un chantier à Abidjan invisible aux ouvriers ivoiriens, et
+  /// proposée aux togolais. Six missions avaient été mal étiquetées avant
+  /// ce correctif.
   static Future<JobRequest> create({
     required int tradeId,
     required String title,
     required String description,
     required String city,
+    String? countryCode,
     String? neighborhood,
     double? budgetMin,
     double? budgetMax,
@@ -75,7 +83,7 @@ class JobsService {
           'currency': AppConfig.defaultCurrency,
           'pricing_unit': pricingUnit,
           'urgency': urgency,
-          'country_code': AppConfig.defaultCountry,
+          'country_code': countryCode ?? AppSession.currentCountry,
           'photos': photos,
         })
         .select()
@@ -130,17 +138,30 @@ class ApplicationsService {
     });
   }
 
-  /// Accepter une candidature. Le trigger SQL affecte l'ouvrier à la mission
-  /// et rejette automatiquement les autres candidatures.
+  /// Le client retient une candidature.
+  ///
+  /// Passe par `accept_application` et non par une écriture directe : la
+  /// colonne `status` n'est plus modifiable depuis l'application, quel que
+  /// soit le compte. Elle l'était, et un ouvrier pouvait alors passer sa
+  /// propre candidature à « acceptée » pour s'attribuer n'importe quelle
+  /// mission ouverte, sans que le client soit consulté.
+  ///
+  /// La fonction attribue la mission, rejette les autres candidatures,
+  /// ferme la demande aux nouvelles, et prévient l'ouvrier retenu.
   static Future<void> accept(String applicationId) async {
-    await db
-        .from('job_applications')
-        .update({'status': 'accepted'}).eq('id', applicationId);
+    await db.rpc('accept_application', params: {
+      'p_application_id': applicationId,
+    });
   }
 
-  static Future<void> reject(String applicationId) async {
-    await db
-        .from('job_applications')
-        .update({'status': 'rejected'}).eq('id', applicationId);
+  /// L'ouvrier retire sa candidature.
+  ///
+  /// Le rejet, lui, n'a plus de geste dédié : accepter une candidature
+  /// rejette automatiquement toutes les autres. Rejeter à l'unité laissait
+  /// l'ouvrier sans réponse et sans explication, ce qui n'apportait rien.
+  static Future<void> withdraw(String applicationId) async {
+    await db.rpc('withdraw_application', params: {
+      'p_application_id': applicationId,
+    });
   }
 }

@@ -2,6 +2,7 @@ import java.util.Properties
 
 plugins {
     id("com.android.application")
+    id("com.google.gms.google-services")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -51,6 +52,15 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // `flutter_local_notifications` utilise les API de date de Java 8
+        // (java.time), absentes des Android anciens. Le desugaring les
+        // réimplémente à la compilation ; sans lui, le build s'arrête sur
+        // « requires core library desugaring to be enabled ».
+        //
+        // Ça compte particulièrement ici : le parc ouest-africain compte
+        // beaucoup d'appareils sous d'anciennes versions d'Android, et
+        // c'est justement pour eux que le desugaring existe.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     defaultConfig {
@@ -106,4 +116,12 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // La bibliothèque qui fournit réellement les API Java 8 rétroportées,
+    // activées par `isCoreLibraryDesugaringEnabled` plus haut. Les deux
+    // vont toujours ensemble : le drapeau seul ne suffit pas, Gradle
+    // réclame alors la dépendance.
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

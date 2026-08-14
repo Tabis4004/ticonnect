@@ -22,3 +22,8 @@ modele-economique-ticonnect.xlsx
 
 # Artefacts renommés par le workflow GitHub avant publication.
 /dist/
+
+# Vidéos et captures pour les réseaux sociaux : lourdes, binaires,
+# régénérables. Le script de voix off reste versionné, lui.
+store/video-reseaux/*.mp4
+store/video-reseaux/captures/

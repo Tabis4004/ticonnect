@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1094514702081",
+    "project_id": "ticonnect-d2825",
+    "storage_bucket": "ticonnect-d2825.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1094514702081:android:3a20eee9f20b99ae730d00",
+        "android_client_info": {
+          "package_name": "com.ticonnect.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAUQrH037iiUXi05Mf8UB5xFshvlL5PcbQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

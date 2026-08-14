@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/formatters.dart';
@@ -5,6 +7,7 @@ import '../../core/supabase.dart';
 import '../../core/theme.dart';
 import '../../models/models.dart';
 import '../../services/chat_service.dart';
+import '../../services/notifications_service.dart';
 import '../../widgets/common.dart';
 
 class ChatPage extends StatefulWidget {
@@ -19,6 +22,17 @@ class ChatPage extends StatefulWidget {
 class _ChatPageState extends State<ChatPage> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Ouvrir la conversation vaut lecture de l'alerte correspondante.
+    // Sans ce geste, la notification restait non lue à jamais côté client,
+    // et le déclencheur cessait d'en créer pour cette conversation.
+    unawaited(
+      NotificationsService.markReadForConversation(widget.conversationId),
+    );
+  }
 
   @override
   void dispose() {

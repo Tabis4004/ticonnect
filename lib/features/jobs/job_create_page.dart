@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 
 import '../../core/config.dart';
+import '../../core/countries.dart';
 import '../../core/supabase.dart';
 import '../../models/models.dart';
 import '../../services/ads_service.dart';
 import '../../services/catalog_service.dart';
 import '../../services/jobs_service.dart';
+import '../../services/session.dart';
 import '../../services/settings_service.dart';
 import '../../widgets/common.dart';
+import '../../widgets/country_picker.dart';
 
 /// Publication d'une demande. Entièrement gratuit pour le client :
 /// c'est lui qui alimente la marketplace en travail.
@@ -44,6 +47,13 @@ class _JobCreatePageState extends State<JobCreatePage> {
   String _urgency = 'flexible';
   String _pricingUnit = 'day';
   bool _busy = false;
+
+  /// Pays du CHANTIER, pas du client.
+  ///
+  /// Initialisé sur son profil, mais modifiable : on peut vivre à Lomé et
+  /// faire construire à Abidjan. Enregistrer le pays de résidence rendait
+  /// la mission invisible aux ouvriers du lieu réel des travaux.
+  late String _country = AppSession.currentCountry;
 
   @override
   void initState() {
@@ -107,6 +117,7 @@ class _JobCreatePageState extends State<JobCreatePage> {
         title: _title.text.trim(),
         description: _description.text.trim(),
         city: _city.text.trim(),
+        countryCode: _country,
         neighborhood:
             _neighborhood.text.trim().isEmpty ? null : _neighborhood.text.trim(),
         budgetMin: double.tryParse(_budgetMin.text.trim()),
@@ -183,6 +194,31 @@ class _JobCreatePageState extends State<JobCreatePage> {
             labelText: 'Description',
             hintText: 'Explique ce qu\'il y a à faire, les matériaux, la durée…',
             alignLabelWithHint: true,
+          ),
+        ),
+        const SizedBox(height: 12),
+        const Text('Où se trouve le chantier ?',
+            style: TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        // Le pays d'abord, et modifiable : c'est lui qui détermine quels
+        // ouvriers seront prévenus. Un client de Lomé qui fait construire
+        // à Abidjan doit pouvoir le dire, sinon personne sur place ne voit
+        // sa demande.
+        InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () async {
+            final picked = await chooseCountry(context);
+            if (picked != null) setState(() => _country = picked.code);
+          },
+          child: InputDecorator(
+            decoration: const InputDecoration(labelText: 'Pays du chantier'),
+            child: Row(children: [
+              Text(Countries.byCode(_country).flag,
+                  style: const TextStyle(fontSize: 18)),
+              const SizedBox(width: 8),
+              Expanded(child: Text(Countries.byCode(_country).name)),
+              const Icon(Icons.arrow_drop_down, color: Colors.black45),
+            ]),
           ),
         ),
         const SizedBox(height: 12),

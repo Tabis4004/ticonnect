@@ -90,7 +90,20 @@ class _JobDetailPageState extends State<JobDetailPage> {
       // l'utilisateur ou plafond atteint, l'envoi se fait quand même.
       // Faire dépendre le gagne-pain d'un ouvrier de la disponibilité
       // d'une vidéo serait à la fois cruel et mauvais pour la liquidité.
-      if (mounted && SettingsService.boolean(SettingKeys.workerApplyAdEnabled, true)) {
+      final mode = SettingsService.string(
+          SettingKeys.workerApplyAdPlacement, 'rewarded');
+
+      if (mounted && mode == 'before') {
+        // Interstitiel imposé : aucun écran d'introduction, aucune sortie
+        // anticipée de notre fait. Le bouton de fermeture est celui que
+        // Google place lui-même sur ses créatifs vidéo — nous ne le
+        // configurons pas, et il ne faut pas chercher à le retarder.
+        await AdsService.maybeShowInterstitial(AdKeys.applyBeforeInterstitial);
+      } else if (mounted && mode == 'rewarded') {
+        // Format récompensé : l'écran d'introduction et son bouton de
+        // sortie ne sont pas décoratifs, ils sont la condition de
+        // conformité. Les retirer déclencherait « Disallowed Rewarded
+        // Implementation » et exposerait le compte à une suspension.
         final accepted =
             await AdIntro.ask(context, AdKeys.applyRewardedInterstitial);
         if (accepted) {
@@ -115,6 +128,14 @@ class _JobDetailPageState extends State<JobDetailPage> {
         if (mounted) {
           setState(() => _applied = true);
           showOk(context, 'Candidature envoyée');
+          // Après l'envoi : même volume d'impressions, aucune candidature
+          // perdue. L'ouvrier a déjà obtenu ce pour quoi il est venu, et
+          // la transition vers l'écran de confirmation est le point que
+          // les règles AdMob désignent comme approprié.
+          if (mode == 'after') {
+            await AdsService.maybeShowInterstitial(
+                AdKeys.applyAfterInterstitial);
+          }
         }
       } catch (e) {
         if (mounted) showError(context, humanError(e));

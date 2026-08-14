@@ -38,4 +38,33 @@ class NotificationsService {
         .eq('profile_id', uid!)
         .isFilter('read_at', null);
   }
+
+  /// Solde les notifications d'une conversation à son ouverture.
+  ///
+  /// `notify_on_message` ne crée qu'une notification non lue par
+  /// conversation, pour ne pas harceler à chaque message. La contrepartie
+  /// est brutale : tant que celle-ci n'est pas soldée, plus aucune n'est
+  /// créée pour cette conversation — donc plus aucun push.
+  ///
+  /// Le marquage était laissé à l'écran « Alertes », que seul un ouvrier
+  /// peut atteindre. Un client ne pouvait donc jamais solder la sienne et
+  /// cessait définitivement d'être prévenu, sans rien avoir fait de mal.
+  /// Lier le marquage à l'ouverture de la conversation ne dépend d'aucun
+  /// écran que l'utilisateur doit penser à visiter.
+  static Future<void> markReadForConversation(String conversationId) async {
+    final me = uid;
+    if (me == null) return;
+    try {
+      await db
+          .from('notifications')
+          .update({'read_at': DateTime.now().toIso8601String()})
+          .eq('profile_id', me)
+          .eq('kind', 'message')
+          .filter('payload->>conversation_id', 'eq', conversationId)
+          .isFilter('read_at', null);
+    } catch (_) {
+      // Silencieux : rater ce marquage ne doit pas empêcher de lire ses
+      // messages. Au pire la notification reste non lue.
+    }
+  }
 }

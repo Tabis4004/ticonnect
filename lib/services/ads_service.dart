@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 
 import '../core/config.dart';
 import '../core/supabase.dart';
+import 'session.dart';
 import '../models/models.dart';
 import 'ads/ads_backend.dart';
 import 'settings_service.dart';
@@ -313,10 +314,18 @@ class AdsService {
     // seul dénominateur honnête pour juger de la santé de `admob-ssv`.
     unawaited(_noteEarned(impressionId));
 
-    // Pas de récompense en crédits sur cet emplacement : inutile
-    // d'immobiliser l'utilisateur douze secondes en attendant la callback.
-    if (p.rewardCredits == 0) return impressionId;
-
+    // On attend toujours la vérification, y compris quand l'emplacement
+    // n'accorde aucun crédit.
+    //
+    // Le raccourci précédent — « reward_credits == 0, donc rien à attendre »
+    // — partait du principe qu'une absence de crédits signifiait qu'aucune
+    // suite serveur ne dépendait de cette impression. C'est faux :
+    // `grant_boost()` exige `ssv_verified`, et le boost est justement
+    // configuré à zéro crédit. L'application rendait donc l'identifiant
+    // avant l'arrivée de la callback, `grant_boost()` refusait pour
+    // « visionnage non vérifié », et la vérification arrivait une seconde
+    // trop tard. La vidéo était vue, confirmée par Google, et le boost
+    // jamais accordé.
     final verified = await _waitForVerification(impressionId);
     return verified ? impressionId : null;
   }
@@ -341,7 +350,7 @@ class AdsService {
             'format': format,
             'ssv_verified': false,
             'reward_credits': 0,
-            'country_code': AppConfig.defaultCountry,
+            'country_code': AppSession.currentCountry,
             // Trace du mode réel : une unité ca-app-pub-3940256099942544
             // signale les publicités de démonstration, pour lesquelles
             // aucune vérification serveur ne peut aboutir.
@@ -468,7 +477,7 @@ class AdsService {
         'format': format,
         'ssv_verified': false,
         'reward_credits': 0,
-        'country_code': AppConfig.defaultCountry,
+        'country_code': AppSession.currentCountry,
         'ad_unit_id': adUnitId,
       });
     } catch (_) {}

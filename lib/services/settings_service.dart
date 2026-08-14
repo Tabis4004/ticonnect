@@ -195,6 +195,10 @@ class SettingKeys {
   /// Publicité récompensée automatique avant l'envoi d'une candidature.
   static const workerApplyAdEnabled = 'worker_apply_ad_enabled';
 
+  /// `before` · `after` · `rewarded` · `off` — quelle publicité imposer
+  /// à l'ouvrier au moment de candidater, et à quel instant.
+  static const workerApplyAdPlacement = 'worker_apply_ad_placement';
+
   /// Au plus un résultat sponsorisé toutes les N positions.
   static const sponsoredSlotRatio = 'sponsored_slot_ratio';
 

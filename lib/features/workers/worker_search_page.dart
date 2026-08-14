@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../../core/countries.dart';
 import '../../core/supabase.dart';
 import '../../models/models.dart';
 import '../../services/ads_service.dart';
 import '../../services/catalog_service.dart';
+import '../../services/session.dart';
 import '../../services/workers_service.dart';
 import '../../widgets/common.dart';
+import '../../widgets/country_picker.dart';
 import 'worker_detail_page.dart';
 
 /// Recherche d'ouvriers — écran d'accueil côté client.
@@ -25,10 +28,25 @@ class _WorkerSearchPageState extends State<WorkerSearchPage> {
   bool _loading = true;
   bool _onlyAvailable = true;
 
+  /// Pays du chantier recherché, pas celui de l'utilisateur.
+  ///
+  /// Initialisé sur son profil, mais modifiable : on peut vivre à Lomé et
+  /// avoir un chantier à Abidjan. C'est fréquent en Afrique de l'Ouest, et
+  /// la version précédente rendait ces recherches impossibles.
+  late String _country = AppSession.currentCountry;
+
   @override
   void initState() {
     super.initState();
     _init();
+  }
+
+  Future<void> _pickCountry() async {
+    final picked = await chooseCountry(context);
+    if (picked != null && picked.code != _country) {
+      setState(() => _country = picked.code);
+      await _search();
+    }
   }
 
   @override
@@ -48,6 +66,7 @@ class _WorkerSearchPageState extends State<WorkerSearchPage> {
     try {
       final r = await WorkersService.search(
         tradeId: _tradeId,
+        countryCode: _country,
         query: _query.text.trim().isEmpty ? null : _query.text.trim(),
       );
       if (mounted) setState(() => _results = r);
@@ -96,6 +115,18 @@ class _WorkerSearchPageState extends State<WorkerSearchPage> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             children: [
+              // Le pays en tête des filtres, et visible en permanence :
+              // c'est le seul qui peut vider la liste sans qu'on comprenne
+              // pourquoi. Un chantier à Abidjan depuis Lomé se cherche ici.
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: ActionChip(
+                  avatar: Text(Countries.byCode(_country).flag,
+                      style: const TextStyle(fontSize: 15)),
+                  label: Text(Countries.byCode(_country).name),
+                  onPressed: _pickCountry,
+                ),
+              ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: FilterChip(

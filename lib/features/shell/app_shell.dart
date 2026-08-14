@@ -22,45 +22,52 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
-    final isWorker = context.watch<AppSession>().isWorker;
+    final session = context.watch<AppSession>();
+    final isWorker = session.isWorker;
+    final isClient = session.isClient;
 
-    final pages = isWorker
-        ? const [JobFeedPage(), ConversationsPage(), ProfilePage()]
-        : const [WorkerSearchPage(), MyJobsPage(), ConversationsPage(), ProfilePage()];
+    // Le rôle `both` existait en base et dans le modèle, mais la
+    // navigation ne connaissait que deux cas : `isWorker` l'emportait, et
+    // un ouvrier qui a lui aussi des besoins se retrouvait sans onglet
+    // pour chercher un artisan ni publier une demande. Un maçon qui doit
+    // faire réparer sa moto est pourtant le cas le plus banal ici.
+    final missions = <Widget>[if (isWorker) const JobFeedPage()];
+    final cherche = <Widget>[if (isClient) const WorkerSearchPage()];
+    final demandes = <Widget>[if (isClient) const MyJobsPage()];
 
-    final destinations = isWorker
-        ? [
-            NavigationDestination(
-                icon: const Icon(Icons.work_outline),
-                selectedIcon: const Icon(Icons.work),
-                label: 'Missions'.tr),
-            NavigationDestination(
-                icon: const Icon(Icons.forum_outlined),
-                selectedIcon: const Icon(Icons.forum),
-                label: 'Messages'.tr),
-            NavigationDestination(
-                icon: const Icon(Icons.person_outline),
-                selectedIcon: const Icon(Icons.person),
-                label: 'Compte'.tr),
-          ]
-        : [
-            NavigationDestination(
-                icon: const Icon(Icons.search),
-                selectedIcon: const Icon(Icons.search),
-                label: 'Chercher'.tr),
-            NavigationDestination(
-                icon: const Icon(Icons.assignment_outlined),
-                selectedIcon: const Icon(Icons.assignment),
-                label: 'Demandes'.tr),
-            NavigationDestination(
-                icon: const Icon(Icons.forum_outlined),
-                selectedIcon: const Icon(Icons.forum),
-                label: 'Messages'.tr),
-            NavigationDestination(
-                icon: const Icon(Icons.person_outline),
-                selectedIcon: const Icon(Icons.person),
-                label: 'Compte'.tr),
-          ];
+    final pages = <Widget>[
+      ...missions,
+      ...cherche,
+      ...demandes,
+      const ConversationsPage(),
+      const ProfilePage(),
+    ];
+
+    final destinations = <NavigationDestination>[
+      if (isWorker)
+        NavigationDestination(
+            icon: const Icon(Icons.work_outline),
+            selectedIcon: const Icon(Icons.work),
+            label: 'Missions'.tr),
+      if (isClient)
+        NavigationDestination(
+            icon: const Icon(Icons.search),
+            selectedIcon: const Icon(Icons.search),
+            label: 'Chercher'.tr),
+      if (isClient)
+        NavigationDestination(
+            icon: const Icon(Icons.assignment_outlined),
+            selectedIcon: const Icon(Icons.assignment),
+            label: 'Demandes'.tr),
+      NavigationDestination(
+          icon: const Icon(Icons.forum_outlined),
+          selectedIcon: const Icon(Icons.forum),
+          label: 'Messages'.tr),
+      NavigationDestination(
+          icon: const Icon(Icons.person_outline),
+          selectedIcon: const Icon(Icons.person),
+          label: 'Compte'.tr),
+    ];
 
     final safeIndex = _index.clamp(0, pages.length - 1);
 

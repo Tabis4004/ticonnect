@@ -49,8 +49,10 @@ class _JobApplicationsPageState extends State<JobApplicationsPage> {
       builder: (_) => AlertDialog(
         title: const Text('Confirmer'),
         content: Text(
-          'Attribuer cette mission à ${a.workerName ?? "cet ouvrier"} ? '
-          'Les autres candidatures seront automatiquement refusées.',
+          'Attribuer cette mission à ${a.workerName ?? "cet ouvrier"} ?\n\n'
+          'Les autres candidatures seront refusées, la demande se fermera '
+          'aux nouvelles, et l\'ouvrier retenu sera prévenu. '
+          'Ce choix ne se reprend pas.',
         ),
         actions: [
           TextButton(

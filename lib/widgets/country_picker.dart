@@ -3,6 +3,22 @@ import 'package:flutter/material.dart';
 import '../core/countries.dart';
 import '../core/theme.dart';
 
+/// Ouvre la liste des pays et rend celui choisi, ou `null`.
+///
+/// Exposé parce que le pays ne sert plus seulement à l'inscription : la
+/// recherche d'ouvriers et la publication d'une mission ont besoin de le
+/// demander sans afficher le bouton indicatif, qui n'a de sens qu'à côté
+/// d'un champ téléphone.
+Future<Country?> chooseCountry(BuildContext context) => showModalBottomSheet<Country>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => const _CountrySheet(),
+    );
+
 /// Sélecteur de pays : drapeau + indicatif, ouvre une liste cherchable.
 class CountryPickerButton extends StatelessWidget {
   final Country selected;

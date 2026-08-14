@@ -83,12 +83,12 @@ class MobileAdsBackend implements AdsBackend {
   }
 
   @override
-  Future<bool> showRewarded({
+  Future<RewardedOutcome> showRewarded({
     required String adUnitId,
     required String userId,
     required String customData,
   }) {
-    final done = Completer<bool>();
+    final done = Completer<RewardedOutcome>();
     RewardedAd.load(
       adUnitId: adUnitId,
       request: const AdRequest(),
@@ -104,17 +104,28 @@ class MobileAdsBackend implements AdsBackend {
           ad.fullScreenContentCallback = FullScreenContentCallback(
             onAdDismissedFullScreenContent: (a) {
               a.dispose();
-              if (!done.isCompleted) done.complete(earned);
+              if (!done.isCompleted) {
+                done.complete(RewardedOutcome(earned: earned));
+              }
             },
-            onAdFailedToShowFullScreenContent: (a, _) {
+            onAdFailedToShowFullScreenContent: (a, e) {
               a.dispose();
-              if (!done.isCompleted) done.complete(false);
+              if (!done.isCompleted) {
+                done.complete(RewardedOutcome(
+                    earned: false, loadError: 'Affichage : ${e.code} ${e.message}'));
+              }
             },
           );
           ad.show(onUserEarnedReward: (_, __) => earned = true);
         },
-        onAdFailedToLoad: (_) {
-          if (!done.isCompleted) done.complete(false);
+        // Le code et le message du SDK sont conservés tels quels : le
+        // code 3 signale « no fill », c'est-à-dire aucun annonceur
+        // disponible, ce qui n'a rien à voir avec un abandon.
+        onAdFailedToLoad: (e) {
+          if (!done.isCompleted) {
+            done.complete(RewardedOutcome(
+                earned: false, loadError: 'Chargement : ${e.code} ${e.message}'));
+          }
         },
       ),
     );
@@ -122,12 +133,12 @@ class MobileAdsBackend implements AdsBackend {
   }
 
   @override
-  Future<bool> showRewardedInterstitial({
+  Future<RewardedOutcome> showRewardedInterstitial({
     required String adUnitId,
     required String userId,
     required String customData,
   }) {
-    final done = Completer<bool>();
+    final done = Completer<RewardedOutcome>();
     RewardedInterstitialAd.load(
       adUnitId: adUnitId,
       request: const AdRequest(),
@@ -141,19 +152,28 @@ class MobileAdsBackend implements AdsBackend {
           ad.fullScreenContentCallback = FullScreenContentCallback(
             onAdDismissedFullScreenContent: (a) {
               a.dispose();
-              if (!done.isCompleted) done.complete(earned);
+              if (!done.isCompleted) {
+                done.complete(RewardedOutcome(earned: earned));
+              }
             },
-            onAdFailedToShowFullScreenContent: (a, _) {
+            onAdFailedToShowFullScreenContent: (a, e) {
               a.dispose();
-              if (!done.isCompleted) done.complete(false);
+              if (!done.isCompleted) {
+                done.complete(RewardedOutcome(
+                    earned: false, loadError: 'Affichage : ${e.code} ${e.message}'));
+              }
             },
           );
           ad.show(onUserEarnedReward: (_, __) => earned = true);
         },
-        onAdFailedToLoad: (_) {
+        onAdFailedToLoad: (e) {
           // Inventaire vide : on n'a pas le droit de bloquer l'utilisateur
-          // pour autant. L'appelant poursuit son action.
-          if (!done.isCompleted) done.complete(false);
+          // pour autant. L'appelant poursuit son action, mais la cause est
+          // désormais consignée au lieu d'être confondue avec un abandon.
+          if (!done.isCompleted) {
+            done.complete(RewardedOutcome(
+                earned: false, loadError: 'Chargement : ${e.code} ${e.message}'));
+          }
         },
       ),
     );

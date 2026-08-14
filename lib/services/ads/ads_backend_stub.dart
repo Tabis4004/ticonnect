@@ -27,20 +27,22 @@ class WebAdsBackend implements AdsBackend {
   Future<void> showAppOpen(String adUnitId) async {}
 
   @override
-  Future<bool> showRewarded({
+  Future<RewardedOutcome> showRewarded({
     required String adUnitId,
     required String userId,
     required String customData,
   }) async =>
-      false;
+      const RewardedOutcome(
+          earned: false, loadError: 'Publicités indisponibles sur le web.');
 
   @override
-  Future<bool> showRewardedInterstitial({
+  Future<RewardedOutcome> showRewardedInterstitial({
     required String adUnitId,
     required String userId,
     required String customData,
   }) async =>
-      false;
+      const RewardedOutcome(
+          earned: false, loadError: 'Publicités indisponibles sur le web.');
 }
 
 AdsBackend createAdsBackend() => WebAdsBackend();

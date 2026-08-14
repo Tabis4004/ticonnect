@@ -22,6 +22,9 @@ class Profile {
   final String? neighborhood;
   final bool isSuspended;
 
+  /// Fin de la visite guidée. Nulle = à présenter au prochain démarrage.
+  final DateTime? onboardingSeenAt;
+
   /// Code de parrainage, généré à la création du profil. Six caractères,
   /// sans 0/O ni 1/I/L : il se dicte au téléphone et se recopie à la main.
   final String? referralCode;
@@ -38,6 +41,7 @@ class Profile {
     this.neighborhood,
     this.isSuspended = false,
     this.referralCode,
+    this.onboardingSeenAt,
   });
 
   bool get isWorker => role == 'worker' || role == 'both';
@@ -55,6 +59,7 @@ class Profile {
         neighborhood: m['neighborhood'] as String?,
         isSuspended: m['is_suspended'] as bool? ?? false,
         referralCode: m['referral_code'] as String?,
+        onboardingSeenAt: _dt(m['onboarding_seen_at']),
       );
 }
 

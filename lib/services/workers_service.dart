@@ -1,5 +1,6 @@
 import '../core/config.dart';
 import '../core/supabase.dart';
+import 'session.dart';
 import '../models/models.dart';
 import 'ads_service.dart';
 
@@ -23,10 +24,18 @@ class BoostResult {
 class WorkersService {
   /// Recherche d'ouvriers (fonction SQL `search_workers`).
   /// Les profils boostés et vérifiés remontent en tête, côté base.
+  /// [countryCode] : pays où se trouve le CHANTIER, pas l'utilisateur.
+  ///
+  /// Par défaut celui du profil, mais modifiable depuis l'écran : ouvrir
+  /// son compte à Lomé et chercher un ouvrier pour un chantier à Abidjan
+  /// est courant — diaspora, commerçants, familles réparties sur deux
+  /// pays. Enfermer la recherche dans le pays de résidence rendait ces
+  /// utilisateurs incapables de trouver qui que ce soit.
   static Future<List<WorkerSearchResult>> search({
     int? tradeId,
     String? city,
     String? query,
+    String? countryCode,
     double? lat,
     double? lon,
     double radiusKm = 25,
@@ -35,7 +44,7 @@ class WorkersService {
   }) async {
     final rows = await db.rpc('search_workers', params: {
       'p_trade_id': tradeId,
-      'p_country_code': AppConfig.defaultCountry,
+      'p_country_code': countryCode ?? AppSession.currentCountry,
       'p_city': city,
       'p_lat': lat,
       'p_lon': lon,
@@ -103,7 +112,28 @@ class WorkersService {
       'pricing_unit': pricingUnit,
       if (availability != null) 'availability': availability,
     });
-    await db.from('profiles').update({'role': 'worker'}).eq('id', uid!);
+    // Un client qui se déclare ouvrier garde ses besoins : il devient
+    // `both`, pas `worker`. L'écraser en `worker` lui retirait les onglets
+    // « Chercher » et « Demandes » sans prévenir, et il perdait l'accès à
+    // ses propres demandes en cours.
+    final actuel = await db
+        .from('profiles')
+        .select('role')
+        .eq('id', uid!)
+        .maybeSingle();
+    final role = (actuel?['role'] as String?) == 'client' ? 'both' : 'worker';
+    await db.from('profiles').update({'role': role}).eq('id', uid!);
+  }
+
+  /// Ajoute ou retire le versant client d'un ouvrier.
+  ///
+  /// Un maçon qui doit faire réparer sa moto est le cas le plus banal du
+  /// marché visé. Le rôle `both` existait depuis l'origine en base, sans
+  /// aucun chemin dans l'interface pour l'atteindre.
+  static Future<void> setAlsoClient(bool aussiClient) async {
+    await db
+        .from('profiles')
+        .update({'role': aussiClient ? 'both' : 'worker'}).eq('id', uid!);
   }
 
   static Future<void> setTrades(List<int> tradeIds, {int? primaryId}) async {
@@ -119,10 +149,22 @@ class WorkersService {
     ]);
   }
 
+  /// Disponibilité de l'ouvrier.
+  ///
+  /// `upsert` et non `update` : un compte inscrit comme ouvrier a bien
+  /// `profiles.role = 'worker'`, mais sa ligne `worker_profiles` n'existe
+  /// qu'après le premier enregistrement du profil métier. Un `update`
+  /// touchait alors zéro ligne — PostgREST répond succès, l'interrupteur
+  /// revenait à sa position d'origine, et aucune erreur ne s'affichait.
+  ///
+  /// L'upsert crée la ligne au besoin. Si le numéro de téléphone manque,
+  /// le garde-fou d'identité progressive lève PHONE_REQUIRED et l'erreur
+  /// remonte enfin à l'utilisateur, qui sait alors quoi faire.
   static Future<void> setAvailability(String value) async {
-    await db
-        .from('worker_profiles')
-        .update({'availability': value}).eq('profile_id', uid!);
+    await db.from('worker_profiles').upsert(
+      {'profile_id': uid, 'availability': value},
+      onConflict: 'profile_id',
+    );
   }
 
   /// Mise en avant gagnée en regardant une vidéo jusqu'au bout.
@@ -138,19 +180,22 @@ class WorkersService {
   /// `grant_boost`, qui exige une impression vérifiée par Google, peut
   /// accorder la mise en avant.
   static Future<BoostResult> boostByWatchingAd() async {
-    if (!await AdsService.canShow(AdKeys.boostRewarded)) {
-      return const BoostResult(
-        BoostOutcome.unavailable,
-        message: 'Aucune vidéo disponible pour le moment. Réessaie plus tard.',
-      );
+    final blocage = await AdsService.blockReason(AdKeys.boostRewarded);
+    if (blocage != null) {
+      return BoostResult(BoostOutcome.unavailable, message: blocage);
     }
 
     final impressionId = await AdsService.showRewarded(AdKeys.boostRewarded);
     if (impressionId == null) {
-      return const BoostResult(
-        BoostOutcome.notVerified,
-        message: "La vidéo n'a pas été validée. Regarde-la jusqu'au bout "
-            'pour être mis en avant.',
+      // Distinguer les deux échecs : reprocher un abandon à quelqu'un qui
+      // n'a jamais vu la moindre vidéo est faux et décourageant.
+      final erreur = AdsService.lastLoadError;
+      return BoostResult(
+        erreur == null ? BoostOutcome.notVerified : BoostOutcome.unavailable,
+        message: erreur == null
+            ? "La vidéo n'a pas été validée. Regarde-la jusqu'au bout pour "
+                'être mis en avant.'
+            : 'Aucune annonce disponible pour le moment. Réessaie plus tard.',
       );
     }
 

@@ -1,0 +1,16 @@
+-- =====================================================================
+-- 59_worker_profiles_upsert_grant.sql
+--
+-- `setAvailability` est passé d'un `update` à un `upsert`, pour créer la
+-- ligne des ouvriers qui n'en ont pas encore. PostgREST traduit un upsert
+-- par INSERT ... ON CONFLICT DO UPDATE en incluant toutes les colonnes
+-- fournies dans la clause DO UPDATE — profile_id comprise.
+--
+-- Or `column_privileges` accordait profile_id en INSERT mais pas en
+-- UPDATE. L'utilisateur voyait « Tu n'as pas les droits pour cette
+-- action » sur un geste parfaitement légitime.
+--
+-- L'ajouter ne rouvre rien : la politique worker_update_self impose
+-- `with check (profile_id = auth.uid())`.
+-- =====================================================================
+grant update (profile_id) on public.worker_profiles to authenticated;

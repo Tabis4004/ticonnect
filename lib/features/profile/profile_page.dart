@@ -37,11 +37,9 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _boost() async {
     if (_boosting) return;
 
-    if (!await AdsService.canShow(AdKeys.boostRewarded)) {
-      if (mounted) {
-        showError(context,
-            'Aucune vidéo disponible pour le moment. Réessaie plus tard.');
-      }
+    final blocage = await AdsService.blockReason(AdKeys.boostRewarded);
+    if (blocage != null) {
+      if (mounted) showError(context, blocage);
       return;
     }
     if (!mounted) return;
@@ -75,6 +73,24 @@ class _ProfilePageState extends State<ProfilePage> {
     setState(() => _switching = true);
     try {
       await WorkersService.setAvailability(available ? 'available' : 'unavailable');
+      if (mounted) await context.read<AppSession>().refresh();
+    } catch (e) {
+      if (mounted) showError(context, humanError(e));
+    }
+    if (mounted) setState(() => _switching = false);
+  }
+
+  /// Ajoute ou retire le versant client.
+  ///
+  /// Méthode de l'État plutôt que fermeture posée dans `onChanged` : dans
+  /// une fermeture, `mounted` est capturé et l'analyseur ne peut plus le
+  /// relier au `BuildContext` utilisé après l'await. Le code fonctionnait,
+  /// mais `use_build_context_synchronously` le signalait — à juste titre,
+  /// puisque rien ne garantissait la relation.
+  Future<void> _toggleAlsoClient(bool aussiClient) async {
+    setState(() => _switching = true);
+    try {
+      await WorkersService.setAlsoClient(aussiClient);
       if (mounted) await context.read<AppSession>().refresh();
     } catch (e) {
       if (mounted) showError(context, humanError(e));
@@ -153,6 +169,57 @@ class _ProfilePageState extends State<ProfilePage> {
           },
         ),
         const Divider(height: 1),
+        // Un ouvrier sans métier déclaré n'existe pour personne : il ne
+        // sort d'aucune recherche et ne reçoit aucune alerte de mission.
+        // La base l'exclut désormais de l'annuaire — encore faut-il le lui
+        // dire, sinon il attend un travail qui ne peut pas arriver.
+        //
+        // `is_listed` vaut exactement « a déclaré un métier » depuis la
+        // migration : aucune requête supplémentaire n'est nécessaire.
+        if (p.isWorker && session.worker?.isListed == false)
+          Container(
+            margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF6E5),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppTheme.accent.withValues(alpha: 0.4)),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                const Icon(Icons.visibility_off_outlined,
+                    size: 18, color: AppTheme.accent),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text('Ton profil n\'est pas visible',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ]),
+              const SizedBox(height: 6),
+              const Text(
+                'Choisis au moins un métier pour apparaître dans les '
+                'recherches et recevoir les missions près de chez toi. '
+                'Sans métier, personne ne peut te trouver.',
+                style: TextStyle(fontSize: 13, height: 1.4),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const WorkerSetupPage()),
+                    );
+                    if (context.mounted) {
+                      await context.read<AppSession>().refresh();
+                    }
+                  },
+                  child: const Text('Choisir mon métier'),
+                ),
+              ),
+            ]),
+          ),
         if (p.isWorker) ...[
           SwitchListTile(
             secondary: Icon(
@@ -207,6 +274,23 @@ class _ProfilePageState extends State<ProfilePage> {
               context,
               MaterialPageRoute(builder: (_) => const WalletPage()),
             ),
+          ),
+          const Divider(height: 1),
+          // Un ouvrier a lui aussi des besoins : faire réparer sa moto,
+          // repeindre sa boutique. Le rôle `both` existait en base depuis
+          // l'origine sans aucun moyen de l'atteindre depuis l'interface.
+          SwitchListTile(
+            secondary: const Icon(Icons.swap_horiz),
+            title: Text('J\'ai aussi des besoins'.tr),
+            subtitle: Text(
+              session.profile!.isClient
+                  ? 'Tu peux chercher un ouvrier et publier des demandes.'
+                  : 'Active pour chercher un ouvrier et publier tes propres '
+                      'demandes, sans quitter ton profil ouvrier.',
+              style: const TextStyle(fontSize: 12),
+            ),
+            value: session.profile!.isClient,
+            onChanged: _switching ? null : _toggleAlsoClient,
           ),
           const Divider(height: 1),
           ListTile(
