@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<!--
+  Page exigée par Google Play depuis le 15 avril 2026 : toute application
+  qui permet de créer un compte doit offrir un moyen d'en demander la
+  suppression DEPUIS L'APPLICATION et DEPUIS LE WEB, sans connexion.
+
+  Elle est déposée dans web/ et non dans build/ : `flutter build web`
+  recopie tout le contenu de web/ dans build/web, comme il le fait déjà
+  pour app-ads.txt. L'adresse publique est donc
+
+      https://ticonnect.isidoretabati.workers.dev/suppression-compte.html
+
+  C'est cette adresse qui va dans le formulaire Sécurité des données.
+
+  Ne rien promettre ici qui ne soit pas tenu. Google vérifie la page ; les
+  utilisateurs, eux, vérifient le délai.
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Supprimer mon compte Ticonnect</title>
+<style>
+  :root { --vert:#1B5E43; --gris:#5A6560; --bord:#E2E6E3; }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; padding:0 20px 64px;
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    color:#1A1F1C; background:#fff;
+  }
+  main { max-width:680px; margin:0 auto; }
+  header { padding:40px 0 8px; border-bottom:3px solid var(--vert); margin-bottom:32px; }
+  h1 { font-size:28px; margin:0 0 6px; color:var(--vert); }
+  header p { margin:0; color:var(--gris); }
+  h2 { font-size:19px; margin:36px 0 10px; }
+  .encadre {
+    border:1px solid var(--bord); border-left:4px solid var(--vert);
+    border-radius:6px; padding:18px 20px; background:#F7FAF8; margin:20px 0;
+  }
+  a { color:var(--vert); }
+  table { border-collapse:collapse; width:100%; margin:14px 0; font-size:15px; }
+  th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--bord); vertical-align:top; }
+  th { background:#F7FAF8; font-weight:600; }
+  ol li, ul li { margin-bottom:7px; }
+  footer { margin-top:48px; padding-top:18px; border-top:1px solid var(--bord); color:var(--gris); font-size:14px; }
+  code { background:#F1F4F2; padding:2px 6px; border-radius:4px; font-size:14px; }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <h1>Supprimer mon compte Ticonnect</h1>
+  <p>Ticonnect — mise en relation entre clients et ouvriers, Togo et Côte d'Ivoire</p>
+</header>
+
+<p>
+  Vous pouvez demander à tout moment la suppression de votre compte Ticonnect
+  et des données qui y sont rattachées. La demande est gratuite et n'a pas à
+  être motivée.
+</p>
+
+<h2>Depuis l'application</h2>
+<p>
+  Ouvrez Ticonnect, puis&nbsp;: <strong>Mon compte → Supprimer mon compte</strong>.
+  La suppression vous est confirmée à l'écran.
+</p>
+
+<h2>Depuis cette page, si vous n'avez plus l'application</h2>
+<div class="encadre">
+  <p style="margin-top:0"><strong>Écrivez à <a href="mailto:isidoretabati@gmail.com?subject=Suppression%20de%20compte%20Ticonnect">isidoretabati@gmail.com</a></strong>
+  en indiquant&nbsp;:</p>
+  <ul style="margin-bottom:0">
+    <li>votre <strong>pseudo</strong> Ticonnect&nbsp;;</li>
+    <li>le <strong>numéro de téléphone</strong> enregistré sur le compte.</li>
+  </ul>
+</div>
+<p>
+  Ces deux éléments servent uniquement à vérifier que la demande vient bien
+  du titulaire du compte&nbsp;: sans cela, n'importe qui pourrait faire
+  supprimer le compte d'un autre. Aucune pièce d'identité n'est demandée.
+</p>
+
+<h2>Délai</h2>
+<p>
+  Le compte est supprimé <strong>sous 30&nbsp;jours</strong> à compter de la
+  demande, en pratique bien plus vite. Vous recevez une confirmation par le
+  même canal. Il n'y a ni désactivation, ni gel, ni période de rétractation
+  pendant laquelle le compte pourrait être réactivé&nbsp;: la suppression est
+  définitive.
+</p>
+
+<h2>Ce qui est supprimé, ce qui est conservé</h2>
+<table>
+  <tr><th>Donnée</th><th>Ce qu'elle devient</th></tr>
+  <tr>
+    <td>Pseudo, nom, ville, quartier, présentation, photo de profil</td>
+    <td>Supprimés</td>
+  </tr>
+  <tr>
+    <td>Téléphone, WhatsApp, adresse e-mail</td>
+    <td>Supprimés</td>
+  </tr>
+  <tr>
+    <td>Position GPS, si vous l'aviez enregistrée</td>
+    <td>Supprimée</td>
+  </tr>
+  <tr>
+    <td>Fiche ouvrier&nbsp;: métiers, tarifs, disponibilité, note, historique des missions</td>
+    <td>Supprimée</td>
+  </tr>
+  <tr>
+    <td>Demandes publiées, candidatures, favoris, notifications, identifiants d'appareil</td>
+    <td>Supprimés</td>
+  </tr>
+  <tr>
+    <td>Messages échangés dans la messagerie</td>
+    <td>
+      Détachés de votre identité (votre nom n'y apparaît plus), puis
+      conservés <strong>12&nbsp;mois</strong>. Ils appartiennent aussi à
+      votre interlocuteur, qui peut en avoir besoin en cas de litige sur une
+      mission. Ils sont ensuite supprimés.
+    </td>
+  </tr>
+  <tr>
+    <td>Avis que vous avez laissés sur un ouvrier</td>
+    <td>
+      Conservés sans votre nom. Retirer un avis reviendrait à modifier la
+      note d'un tiers.
+    </td>
+  </tr>
+  <tr>
+    <td>Signalements vous concernant, suspensions</td>
+    <td>
+      Conservés 12&nbsp;mois, sous la forme du seul numéro de téléphone
+      concerné, pour empêcher la recréation immédiate d'un compte suspendu.
+    </td>
+  </tr>
+</table>
+
+<h2>Supprimer certaines données sans supprimer le compte</h2>
+<p>
+  Depuis <strong>Mon compte</strong>, vous pouvez à tout moment effacer votre
+  position GPS, votre WhatsApp, votre e-mail, votre présentation et votre
+  photo, ou retirer votre fiche de l'annuaire, sans fermer votre compte.
+</p>
+
+<h2>Une remarque importante sur la messagerie</h2>
+<p>
+  Les échanges menés dans Ticonnect ne sont pas privés&nbsp;: l'administrateur
+  de la plateforme peut les consulter, afin de traiter les signalements et les
+  litiges. N'y écrivez rien que vous ne diriez pas devant un tiers. Pour une
+  conversation privée, utilisez le téléphone ou WhatsApp.
+</p>
+
+<footer>
+  Ticonnect · Éditeur&nbsp;: Isidore Tabati ·
+  <a href="mailto:isidoretabati@gmail.com">isidoretabati@gmail.com</a><br>
+  Page mise à jour le 14&nbsp;août&nbsp;2026.
+</footer>
+
+</main>
+</body>
+</html>

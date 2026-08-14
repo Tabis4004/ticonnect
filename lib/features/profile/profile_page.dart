@@ -13,6 +13,7 @@ import '../../services/settings_service.dart';
 import '../../services/workers_service.dart';
 import '../../widgets/ad_intro.dart';
 import '../../widgets/common.dart';
+import 'trade_picker_page.dart';
 import '../worker/wallet_page.dart';
 import 'admin_page.dart';
 import 'contact_page.dart';
@@ -430,10 +431,30 @@ class _WorkerSetupPageState extends State<WorkerSetupPage> {
   final _rateMin = TextEditingController();
   final _rateMax = TextEditingController();
 
-  List<TradeCategory> _categories = [];
+  // Le catalogue reste chargé ici pour afficher le nom des métiers retenus :
+  // `worker_trades` ne stocke que des identifiants, et l'écran de choix
+  // rend lui aussi des identifiants.
   List<Trade> _trades = [];
   final Set<int> _selected = {};
-  int? _categoryId;
+
+  /// Les métiers retenus, dans l'ordre du catalogue plutôt que dans celui
+  /// des clics : deux ouvertures de l'écran donneraient sinon deux ordres
+  /// différents pour la même sélection.
+  List<Trade> get _selectedTrades =>
+      _trades.where((t) => _selected.contains(t.id)).toList();
+
+  Future<void> _pickTrades() async {
+    final r = await Navigator.push<Set<int>>(
+      context,
+      MaterialPageRoute(builder: (_) => TradePickerPage(initial: _selected)),
+    );
+    if (r == null || !mounted) return;
+    setState(() {
+      _selected
+        ..clear()
+        ..addAll(r);
+    });
+  }
   String _pricingUnit = 'day';
   bool _busy = false;
 
@@ -444,7 +465,6 @@ class _WorkerSetupPageState extends State<WorkerSetupPage> {
   }
 
   Future<void> _init() async {
-    _categories = await CatalogService.categories();
     _trades = await CatalogService.trades();
 
     // Le catalogue vient du réseau : l'écran peut avoir été quitté entre
@@ -504,8 +524,6 @@ class _WorkerSetupPageState extends State<WorkerSetupPage> {
 
   @override
   Widget build(BuildContext context) {
-    final visible = _trades.where((t) => t.categoryId == _categoryId).toList();
-
     return Scaffold(
       appBar: AppBar(title: Text('Mon profil ouvrier'.tr)),
       body: ListView(padding: const EdgeInsets.all(16), children: [
@@ -523,34 +541,54 @@ class _WorkerSetupPageState extends State<WorkerSetupPage> {
           decoration: const InputDecoration(labelText: "Années d'expérience"),
         ),
         const SizedBox(height: 20),
-        const Text('Tes métiers', style: TextStyle(fontWeight: FontWeight.w600)),
-        const SizedBox(height: 8),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          for (final c in _categories)
-            ChoiceChip(
-              label: Text(c.nameFr),
-              selected: _categoryId == c.id,
-              onSelected: (v) => setState(() => _categoryId = v ? c.id : null),
-            ),
+        Row(children: [
+          const Expanded(
+            child: Text('Tes métiers',
+                style: TextStyle(fontWeight: FontWeight.w600)),
+          ),
+          // « Modifier » plutôt que « Choisir » une fois la sélection faite :
+          // le libellé dit ce que le geste change, pas ce qu'il ouvre.
+          TextButton.icon(
+            onPressed: _pickTrades,
+            icon: Icon(_selected.isEmpty ? Icons.add : Icons.edit_outlined,
+                size: 18),
+            label: Text(_selected.isEmpty ? 'Choisir' : 'Modifier'),
+          ),
         ]),
-        if (visible.isNotEmpty) ...[
-          const SizedBox(height: 12),
+        const SizedBox(height: 4),
+
+        // Seuls les métiers retenus sont affichés. Le catalogue entier a
+        // migré vers un écran dédié : le garder ici obligeait à parcourir
+        // les catégories pour relire son propre choix, et un métier coché
+        // dans une catégorie devenait invisible dès qu'on en ouvrait une
+        // autre.
+        if (_selected.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF5F7F6),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFE6EAE7)),
+            ),
+            child: const Text(
+              'Aucun métier choisi. Sans métier, ton profil ne remonte dans '
+              'aucune recherche et tu ne reçois aucune mission.',
+              style: TextStyle(fontSize: 12, color: Colors.black54),
+            ),
+          )
+        else
           Wrap(spacing: 8, runSpacing: 8, children: [
-            for (final t in visible)
-              FilterChip(
+            for (final t in _selectedTrades)
+              Chip(
                 label: Text(t.nameFr),
-                selected: _selected.contains(t.id),
-                onSelected: (v) => setState(() {
-                  v ? _selected.add(t.id) : _selected.remove(t.id);
-                }),
+                backgroundColor: AppTheme.primary.withValues(alpha: 0.10),
+                side: BorderSide(
+                    color: AppTheme.primary.withValues(alpha: 0.25)),
+                labelStyle: const TextStyle(
+                    color: AppTheme.primary, fontWeight: FontWeight.w600),
               ),
           ]),
-        ],
-        if (_selected.isNotEmpty) ...[
-          const SizedBox(height: 14),
-          Text('${_selected.length} métier(s) sélectionné(s)',
-              style: const TextStyle(fontSize: 12, color: Colors.black54)),
-        ],
         const SizedBox(height: 20),
         const Text('Ton tarif', style: TextStyle(fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),

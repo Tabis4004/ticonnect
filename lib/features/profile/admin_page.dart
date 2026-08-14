@@ -5,6 +5,8 @@ import '../../core/supabase.dart';
 import '../../core/theme.dart';
 import '../../services/settings_service.dart';
 import '../../widgets/common.dart';
+import 'admin_explorer_page.dart';
+import 'admin_roles_page.dart';
 import 'settings_page.dart';
 
 /// Tableau de bord administrateur.
@@ -27,6 +29,8 @@ class _AdminPageState extends State<AdminPage> {
   List<Map<String, dynamic>> _adDiag = [];
   List<Map<String, dynamic>> _jobs = [];
   Map<String, dynamic>? _ssvHealth;
+  String? _role;
+  int _demoAds = 0;
   bool _isSuper = false;
   bool _busyJobs = false;
   bool _loading = true;
@@ -145,9 +149,31 @@ class _AdminPageState extends State<AdminPage> {
         _adDiag = [];
       }
       try {
-        _isSuper = (await db.rpc('is_superadmin') as bool?) ?? false;
+        _role = await db.rpc('admin_role') as String?;
+        _isSuper = _role == 'superadmin';
       } catch (_) {
+        // Avant la migration `admin_roles`, `admin_role()` n'existe pas.
+        _role = null;
         _isSuper = false;
+      }
+
+      // Compte les impressions servies par les unités de démonstration de
+      // Google. Une version compilée sans `ADS_TEST=false` fonctionne
+      // parfaitement, affiche des annonces, et ne rapporte rien : rien dans
+      // l'application ne le signale, et le seul symptôme est un revenu qui
+      // reste à zéro. Ce compteur est le garde-fou.
+      try {
+        final r = await db
+            .from('ad_impressions')
+            .select('*')
+            .like('ad_unit_id', 'ca-app-pub-3940256099942544%')
+            .gte('created_at',
+                DateTime.now().toUtc().subtract(const Duration(days: 7))
+                    .toIso8601String())
+            .count();
+        _demoAds = r.count;
+      } catch (_) {
+        _demoAds = 0;
       }
       try {
         _jobs = List<Map<String, dynamic>>.from(await db
@@ -189,6 +215,18 @@ class _AdminPageState extends State<AdminPage> {
           // Tous les réglages de la plateforme, générés depuis la base.
           // Onze d'entre eux n'étaient jusqu'ici modifiables que depuis
           // l'éditeur SQL de Supabase.
+          if (_isSuper)
+            IconButton(
+              tooltip: 'Administrateurs',
+              icon: const Icon(Icons.admin_panel_settings_outlined),
+              onPressed: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AdminRolesPage()),
+                );
+                if (mounted) await _load();
+              },
+            ),
           IconButton(
             tooltip: 'Réglages',
             icon: const Icon(Icons.tune),
@@ -208,6 +246,12 @@ class _AdminPageState extends State<AdminPage> {
           : RefreshIndicator(
               onRefresh: _load,
               child: ListView(padding: const EdgeInsets.all(16), children: [
+                if (_demoAds > 0) ...[
+                  _demoAdsWarning(),
+                  const SizedBox(height: 16),
+                ],
+                _explorerCard(),
+                const SizedBox(height: 24),
                 GridView.count(
                   crossAxisCount: 2,
                   shrinkWrap: true,
@@ -553,6 +597,50 @@ class _AdminPageState extends State<AdminPage> {
   /// bouton de publication — c'est le parcours client. Tester le fil des
   /// missions imposait donc de jongler entre deux comptes. Cette section
   /// permet de fabriquer une demande sans changer d'identité.
+  /// Accès aux données, en lecture.
+  ///
+  /// Les politiques ouvertes en base ne servaient à rien sans écran pour
+  /// les exploiter : l'administrateur restait aveugle depuis
+  /// l'application, alors que la base lui montrait déjà tout.
+  Widget _explorerCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE6EAE7)),
+      ),
+      child: Column(children: [
+        ListTile(
+          leading: const Icon(Icons.groups_outlined, color: AppTheme.primary),
+          title: const Text('Comptes',
+              style: TextStyle(fontWeight: FontWeight.w600)),
+          subtitle: const Text(
+            'Clients et ouvriers : rôle, ville, téléphone, note, annuaire.',
+            style: TextStyle(fontSize: 12),
+          ),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.push(context,
+              MaterialPageRoute(builder: (_) => const AdminUsersPage())),
+        ),
+        const Divider(height: 1),
+        ListTile(
+          leading: const Icon(Icons.forum_outlined, color: AppTheme.primary),
+          title: const Text('Conversations',
+              style: TextStyle(fontWeight: FontWeight.w600)),
+          subtitle: const Text(
+            'Archive complète des échanges. Les messages contenant un '
+            'numéro sont surlignés.',
+            style: TextStyle(fontSize: 12),
+          ),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.push(context,
+              MaterialPageRoute(
+                  builder: (_) => const AdminConversationsPage())),
+        ),
+      ]),
+    );
+  }
+
   Widget _jobsCard() {
     return Container(
       padding: const EdgeInsets.all(14),
@@ -622,6 +710,43 @@ class _AdminPageState extends State<AdminPage> {
             ),
           ),
         ],
+      ]),
+    );
+  }
+
+  /// Alerte : la version distribuée sert des unités de démonstration.
+  ///
+  /// Le symptôme est trompeur — l'application marche, les annonces
+  /// s'affichent, les utilisateurs regardent les vidéos jusqu'au bout, les
+  /// boosts sont accordés. Seul le revenu reste à zéro, et rien ne dit
+  /// pourquoi. La cause est toujours la même : un bundle compilé sans
+  /// `ADS_TEST=false`.
+  Widget _demoAdsWarning() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFDECEA),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.red.shade200),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(Icons.warning_amber_rounded, color: Colors.red.shade700),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Annonces de démonstration en circulation',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold, color: Colors.red.shade900)),
+            const SizedBox(height: 4),
+            Text(
+              '$_demoAds impression(s) sur les sept derniers jours ont été '
+              'servies par les unités de test de Google. Elles ne rapportent '
+              'rien. Une version compilée sans ADS_TEST=false est distribuée : '
+              'refais un bundle avec ./build_aab.sh puis dépose-le.',
+              style: TextStyle(fontSize: 12, color: Colors.red.shade900),
+            ),
+          ]),
+        ),
       ]),
     );
   }

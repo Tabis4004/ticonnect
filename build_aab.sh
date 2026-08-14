@@ -21,21 +21,41 @@ echo "==> Dépendances"
 flutter pub get
 
 echo "==> Compilation du bundle"
-# Même logique que build_apk.sh : le mode publicitaire s'annonce, il ne
-# se devine pas. Un bundle déposé sur la Play Console avec les unités de
-# démonstration ne rapporterait rien, sans que rien ne le signale.
-ADS_TEST="${ADS_TEST:-true}"
+# Défaut VOLONTAIREMENT inverse de build_apk.sh.
+#
+# Un APK est un artefact de test : le mode démonstration y est le bon
+# défaut, il protège le compte AdMob. Un AAB n'existe que pour être déposé
+# sur la Play Console — un défaut en mode démonstration y est un piège
+# silencieux. L'application fonctionne, les utilisateurs voient des
+# annonces factices de Google, et rien ne rapporte sans qu'aucune erreur
+# ne le signale. On peut le découvrir des semaines plus tard.
+#
+#   ./build_aab.sh               -> vraies unités, prêt à publier
+#   ADS_TEST=true ./build_aab.sh -> démonstration, pour vérifier un parcours
+ADS_TEST="${ADS_TEST:-false}"
 if [ "$ADS_TEST" = "false" ]; then
   echo "    PUBLICITÉS RÉELLES — unités de ton compte AdMob."
+  echo "    Bundle publiable."
 else
-  echo "    Publicités de TEST — à ne pas déposer sur la Play Console."
+  echo
+  echo "    ⚠️  PUBLICITÉS DE DÉMONSTRATION"
+  echo "    Ce bundle ne rapportera RIEN s'il est déposé sur la Play Console."
+  echo "    Le fichier portera le suffixe -DEMO pour éviter la confusion."
+  echo
+  # Cinq secondes pour interrompre : le coût d'une erreur ici se compte en
+  # semaines de revenu perdu, celui de l'attente en secondes.
+  sleep 5
 fi
 flutter build appbundle --release --dart-define=ADS_TEST="$ADS_TEST"
 
 # La version dans le nom du fichier : la Play Console refuse un versionCode
 # déjà utilisé, et plusieurs bundles sur le Bureau sont vite indiscernables.
 VERSION="$(sed -n 's/^version: *//p' pubspec.yaml | tr '+' '-')"
-DEST="$HOME/Desktop/ticonnect-$VERSION-$(date +%Y%m%d-%H%M).aab"
+# Le suffixe rend l'erreur visible sur le Bureau. Deux bundles côte à côte
+# étaient jusqu'ici indiscernables — c'est au moment de choisir lequel
+# téléverser qu'on veut le savoir, pas après.
+SUFFIXE=$([ "$ADS_TEST" = "false" ] && echo "" || echo "-DEMO-NE-PAS-PUBLIER")
+DEST="$HOME/Desktop/ticonnect-$VERSION-$(date +%Y%m%d-%H%M)$SUFFIXE.aab"
 cp build/app/outputs/bundle/release/app-release.aab "$DEST"
 
 echo

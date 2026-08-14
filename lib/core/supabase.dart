@@ -64,6 +64,23 @@ String humanError(Object error) {
       return 'Cette action a déjà été effectuée.';
     }
 
+    // Administration. `LAST_SUPERADMIN` mérite sa phrase : le geste refusé
+    // est celui qui verrouillerait définitivement les réglages et les
+    // tarifs, sans autre issue que l'éditeur SQL de Supabase.
+    if (msg.contains('LAST_SUPERADMIN')) {
+      return "C'est le dernier superadministrateur. Nomme-en un autre "
+          'avant de retirer celui-ci.';
+    }
+    if (msg.contains('USER_UNKNOWN')) {
+      return "Aucun compte ne porte ce pseudo. Vérifie l'orthographe.";
+    }
+    if (msg.contains('ROLE_UNKNOWN')) {
+      return 'Rôle inconnu.';
+    }
+    if (msg.contains('FORBIDDEN')) {
+      return 'Seul un superadministrateur peut nommer un administrateur.';
+    }
+
     // Attribution d'une mission. Deux clients peuvent accepter au même
     // moment sur la même demande, ou l'ouvrier avoir retiré sa candidature
     // entre l'affichage de la liste et le clic : dire lequel des deux
