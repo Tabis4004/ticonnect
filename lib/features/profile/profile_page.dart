@@ -188,11 +188,11 @@ class _ProfilePageState extends State<ProfilePage> {
               border: Border.all(color: AppTheme.accent.withValues(alpha: 0.4)),
             ),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                const Icon(Icons.visibility_off_outlined,
+              const Row(children: [
+                Icon(Icons.visibility_off_outlined,
                     size: 18, color: AppTheme.accent),
-                const SizedBox(width: 8),
-                const Expanded(
+                SizedBox(width: 8),
+                Expanded(
                   child: Text('Ton profil n\'est pas visible',
                       style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
