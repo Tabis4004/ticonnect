@@ -100,36 +100,21 @@ class _AdminRolesPageState extends State<AdminRolesPage> {
     if (mounted) setState(() => _busy = false);
   }
 
-  /// Saisie du pseudo puis choix du rôle, dans cet ordre.
+  /// Choix du compte dans la liste, puis choix du rôle.
+  ///
+  /// Le compte se choisit et ne se tape pas : le superadmin ne connaît pas
+  /// par cœur les pseudos, et une faute de frappe se soldait par « aucun
+  /// compte ne porte ce pseudo » sans rien pour s'orienter.
   ///
   /// Le rôle est demandé en second et sans valeur par défaut : proposer
   /// « Superadministrateur » présélectionné ferait du droit le plus large
   /// le résultat d'une validation distraite.
   Future<void> _nommer() async {
-    final ctrl = TextEditingController();
-    final username = await showDialog<String>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('Nommer un administrateur'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: "Pseudo du compte",
-            hintText: 'Tel qu\'il apparaît dans l\'application',
-          ),
-          onSubmitted: (v) => Navigator.pop(c, v.trim()),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(c), child: const Text('Annuler')),
-          TextButton(
-              onPressed: () => Navigator.pop(c, ctrl.text.trim()),
-              child: const Text('Suivant')),
-        ],
-      ),
+    final username = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const _ChoixCompte()),
     );
-    if (username == null || username.isEmpty || !mounted) return;
+    if (username == null || !mounted) return;
 
     final role = await _choisirRole(titre: 'Quel accès pour $username ?');
     if (role != null) await _apply(username, role);
@@ -241,6 +226,120 @@ class _AdminRolesPageState extends State<AdminRolesPage> {
                 },
               ),
       ),
+    );
+  }
+}
+
+/// Liste des comptes, avec recherche.
+///
+/// Rend le pseudo choisi. La recherche part vide et affiche les
+/// administrateurs en tête : ouvrir cet écran sert aussi bien à en nommer un
+/// nouveau qu'à retrouver celui dont on veut changer le rôle.
+class _ChoixCompte extends StatefulWidget {
+  const _ChoixCompte();
+  @override
+  State<_ChoixCompte> createState() => _ChoixCompteState();
+}
+
+class _ChoixCompteState extends State<_ChoixCompte> {
+  final _ctrl = TextEditingController();
+  List<Map<String, dynamic>> _rows = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _search('');
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _search(String q) async {
+    setState(() => _loading = true);
+    try {
+      _rows = List<Map<String, dynamic>>.from(await db.rpc(
+        'search_profiles_for_admin',
+        params: {'p_query': q, 'p_limit': 50},
+      ));
+    } catch (e) {
+      if (mounted) showError(context, humanError(e));
+    }
+    if (mounted) setState(() => _loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Choisir un compte')),
+      body: Column(children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: TextField(
+            controller: _ctrl,
+            autofocus: true,
+            textInputAction: TextInputAction.search,
+            onSubmitted: _search,
+            decoration: InputDecoration(
+              isDense: true,
+              prefixIcon: const Icon(Icons.search, size: 20),
+              hintText: 'Pseudo ou nom',
+              border: const OutlineInputBorder(),
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.arrow_forward, size: 20),
+                onPressed: () => _search(_ctrl.text),
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: _loading
+              ? const Loading()
+              : _rows.isEmpty
+                  ? const EmptyState(
+                      icon: Icons.person_search_outlined,
+                      title: 'Aucun compte',
+                      subtitle: 'Essaie une autre orthographe.',
+                    )
+                  : ListView.separated(
+                      itemCount: _rows.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (_, i) {
+                        final r = _rows[i];
+                        final role = r['role'] as String?;
+                        return ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor:
+                                AppTheme.primary.withValues(alpha: 0.12),
+                            child: Text(
+                              '${r['username'] ?? '?'}'
+                                  .substring(0, 1)
+                                  .toUpperCase(),
+                              style: const TextStyle(color: AppTheme.primary),
+                            ),
+                          ),
+                          title: Text('${r['username']}'),
+                          subtitle: Text(
+                            role == null
+                                ? (r['full_name'] as String? ?? '—')
+                                : 'Déjà ${_roles[role]?.titre ?? role}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: role == null
+                                  ? Colors.black54
+                                  : AppTheme.primary,
+                            ),
+                          ),
+                          onTap: () =>
+                              Navigator.pop(context, '${r['username']}'),
+                        );
+                      },
+                    ),
+        ),
+      ]),
     );
   }
 }

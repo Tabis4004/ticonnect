@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
+import '../core/supabase.dart';
 import '../core/theme.dart';
+import '../features/chat/chat_page.dart';
 import '../models/models.dart';
+import '../services/chat_service.dart';
 import '../services/contact_service.dart';
 import '../services/session.dart';
 import 'common.dart';
@@ -68,6 +70,35 @@ class _LockedContactCardState extends State<LockedContactCard> {
     }
   }
 
+  /// Ouvre la conversation liée à cette mission.
+  ///
+  /// Cette carte n'est montrée qu'à l'ouvrier : `targetProfileId` est donc
+  /// le client, et `uid` l'ouvrier. Passer `jobId` rattache l'échange à la
+  /// mission — sans lui, `openWith` retrouverait ou créerait la
+  /// conversation générale entre les deux comptes, et deux missions
+  /// distinctes se mélangeraient dans le même fil.
+  Future<void> _ouvrirMessagerie() async {
+    setState(() => _busy = true);
+    try {
+      final id = await ChatService.openWith(
+        clientId: widget.targetProfileId,
+        workerId: uid!,
+        jobId: widget.jobId,
+      );
+      if (!mounted) return;
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              ChatPage(conversationId: id, title: widget.targetName),
+        ),
+      );
+    } catch (e) {
+      if (mounted) showError(context, humanError(e));
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
   Future<void> _run(Future<UnlockResult> Function() action) async {
     setState(() => _busy = true);
     final result = await action();
@@ -123,25 +154,27 @@ class _LockedContactCardState extends State<LockedContactCard> {
             SelectableText(phone,
                 style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
-            Row(children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: () => launchUrl(Uri.parse('tel:$phone')),
-                  icon: const Icon(Icons.phone),
-                  label: const Text('Appeler'),
-                ),
+            // Un seul chemin, et il passe par l'application.
+            //
+            // « Appeler » et « WhatsApp » ouvraient une autre application :
+            // l'échange sortait de la plateforme au premier geste, et plus
+            // rien n'en était mesurable. Le taux de réponse d'un ouvrier, le
+            // délai avant sa première réponse, le taux de fuite — tous les
+            // indicateurs du tableau de bord ne voyaient que la fraction des
+            // conversations restées ici.
+            //
+            // Le numéro reste affiché : il est ce que le déverrouillage a
+            // accordé, et le masquer changerait la nature du produit. Tant
+            // qu'il est lisible, la mesure reste partielle — mais elle
+            // cesse d'être contournée par défaut.
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _busy ? null : _ouvrirMessagerie,
+                icon: const Icon(Icons.chat_bubble_outline),
+                label: const Text('Envoyer un message'),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => launchUrl(
-                    Uri.parse('https://wa.me/${phone.replaceAll(RegExp(r"[^0-9]"), "")}'),
-                  ),
-                  icon: const Icon(Icons.chat_outlined),
-                  label: const Text('WhatsApp'),
-                ),
-              ),
-            ]),
+            ),
           ],
         ]),
       ),
