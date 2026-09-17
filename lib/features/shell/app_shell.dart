@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/l10n.dart';
+import '../../services/realty_service.dart';
 import '../../services/session.dart';
 import '../chat/chat_pages.dart';
 import '../jobs/my_jobs_page.dart';
 import '../profile/profile_page.dart';
+import '../realty/realty_list_page.dart';
 import '../worker/job_feed_page.dart';
 import '../workers/worker_search_page.dart';
 
@@ -35,10 +37,18 @@ class _AppShellState extends State<AppShell> {
     final cherche = <Widget>[if (isClient) const WorkerSearchPage()];
     final demandes = <Widget>[if (isClient) const MyJobsPage()];
 
+    // Le module immobilier n'apparaît que si un administrateur l'a allumé.
+    // Une rubrique vide donne l'impression d'un produit mort, et c'est la
+    // première chose que verrait quelqu'un qui découvre l'application.
+    final immobilier = <Widget>[
+      if (RealtyService.enabled) const RealtyListPage(),
+    ];
+
     final pages = <Widget>[
       ...missions,
       ...cherche,
       ...demandes,
+      ...immobilier,
       const ConversationsPage(),
       const ProfilePage(),
     ];
@@ -59,6 +69,11 @@ class _AppShellState extends State<AppShell> {
             icon: const Icon(Icons.assignment_outlined),
             selectedIcon: const Icon(Icons.assignment),
             label: 'Demandes'.tr),
+      if (RealtyService.enabled)
+        NavigationDestination(
+            icon: const Icon(Icons.home_work_outlined),
+            selectedIcon: const Icon(Icons.home_work),
+            label: 'Immobilier'.tr),
       NavigationDestination(
           icon: const Icon(Icons.forum_outlined),
           selectedIcon: const Icon(Icons.forum),

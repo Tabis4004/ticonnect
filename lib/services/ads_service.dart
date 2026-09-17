@@ -490,6 +490,11 @@ class AdKeys {
   static const unlockRewarded = 'unlock_contact_rewarded';
   static const boostRewarded = 'boost_profile_rewarded';
 
+  /// Ouverture d'une annonce immobilière. Actif seulement si le régime
+  /// `realty_unlock_mode` vaut « video » — sinon l'annonce s'ouvre sans
+  /// rien demander, ou contre un paiement.
+  static const realtyUnlockRewarded = 'realty_unlock_rewarded';
+
   static const jobListBanner = 'job_list_banner';
 
   /// Client, bas de la fiche d'un ouvrier. Le seul écran où un demandeur
