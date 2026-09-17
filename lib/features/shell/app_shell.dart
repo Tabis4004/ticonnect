@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/l10n.dart';
 import '../../services/realty_service.dart';
 import '../../services/session.dart';
+import '../../widgets/pastel_nav_bar.dart';
 import '../chat/chat_pages.dart';
 import '../jobs/my_jobs_page.dart';
 import '../profile/profile_page.dart';
@@ -53,45 +54,60 @@ class _AppShellState extends State<AppShell> {
       const ProfilePage(),
     ];
 
-    final destinations = <NavigationDestination>[
+    // Une entrée par page, dans le même ordre : la barre et l'IndexedStack
+    // se lisent sur le même index, et un décalage entre les deux enverrait
+    // sur le mauvais écran.
+    final destinations = <PastelNavItem>[
       if (isWorker)
-        NavigationDestination(
-            icon: const Icon(Icons.work_outline),
-            selectedIcon: const Icon(Icons.work),
-            label: 'Missions'.tr),
+        PastelNavItem(
+            icon: Icons.work_outline,
+            selectedIcon: Icons.work,
+            label: 'Missions'.tr,
+            tint: NavTints.missions.tint,
+            ink: NavTints.missions.ink),
       if (isClient)
-        NavigationDestination(
-            icon: const Icon(Icons.search),
-            selectedIcon: const Icon(Icons.search),
-            label: 'Chercher'.tr),
+        PastelNavItem(
+            icon: Icons.search,
+            selectedIcon: Icons.search,
+            label: 'Chercher'.tr,
+            tint: NavTints.recherche.tint,
+            ink: NavTints.recherche.ink),
       if (isClient)
-        NavigationDestination(
-            icon: const Icon(Icons.assignment_outlined),
-            selectedIcon: const Icon(Icons.assignment),
-            label: 'Demandes'.tr),
+        PastelNavItem(
+            icon: Icons.assignment_outlined,
+            selectedIcon: Icons.assignment,
+            label: 'Demandes'.tr,
+            tint: NavTints.demandes.tint,
+            ink: NavTints.demandes.ink),
       if (RealtyService.enabled)
-        NavigationDestination(
-            icon: const Icon(Icons.home_work_outlined),
-            selectedIcon: const Icon(Icons.home_work),
-            label: 'Immobilier'.tr),
-      NavigationDestination(
-          icon: const Icon(Icons.forum_outlined),
-          selectedIcon: const Icon(Icons.forum),
-          label: 'Messages'.tr),
-      NavigationDestination(
-          icon: const Icon(Icons.person_outline),
-          selectedIcon: const Icon(Icons.person),
-          label: 'Compte'.tr),
+        PastelNavItem(
+            icon: Icons.home_work_outlined,
+            selectedIcon: Icons.home_work,
+            label: 'Immobilier'.tr,
+            tint: NavTints.immobilier.tint,
+            ink: NavTints.immobilier.ink),
+      PastelNavItem(
+          icon: Icons.forum_outlined,
+          selectedIcon: Icons.forum,
+          label: 'Messages'.tr,
+          tint: NavTints.messages.tint,
+          ink: NavTints.messages.ink),
+      PastelNavItem(
+          icon: Icons.person_outline,
+          selectedIcon: Icons.person,
+          label: 'Compte'.tr,
+          tint: NavTints.compte.tint,
+          ink: NavTints.compte.ink),
     ];
 
     final safeIndex = _index.clamp(0, pages.length - 1);
 
     return Scaffold(
       body: IndexedStack(index: safeIndex, children: pages),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: safeIndex,
-        onDestinationSelected: (i) => setState(() => _index = i),
-        destinations: destinations,
+      bottomNavigationBar: PastelNavBar(
+        items: destinations,
+        index: safeIndex,
+        onTap: (i) => setState(() => _index = i),
       ),
     );
   }
