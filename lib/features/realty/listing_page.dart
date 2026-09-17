@@ -239,10 +239,10 @@ class _ListingPageState extends State<ListingPage> {
   Widget _blocOuvert() {
     final p = _prive!;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        const Icon(Icons.lock_open, size: 18, color: AppTheme.primary),
-        const SizedBox(width: 6),
-        const Text('Annonce ouverte',
+      const Row(children: [
+        Icon(Icons.lock_open, size: 18, color: AppTheme.primary),
+        SizedBox(width: 6),
+        Text('Annonce ouverte',
             style: TextStyle(fontWeight: FontWeight.bold)),
       ]),
       const SizedBox(height: 12),
@@ -309,11 +309,11 @@ class _ListingPageState extends State<ListingPage> {
       ] else if (_planEnPreparation)
         // Distinguer les deux : « en préparation » se règle en attendant,
         // « aucun plan » ne se règle pas du tout.
-        Row(children: [
-          const SizedBox(
+        const Row(children: [
+          SizedBox(
               width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
-          const SizedBox(width: 8),
-          const Expanded(
+          SizedBox(width: 8),
+          Expanded(
             child: Text('Le plan est en préparation. Reviens dans un instant.',
                 style: TextStyle(fontSize: 12, color: Colors.black54)),
           ),
